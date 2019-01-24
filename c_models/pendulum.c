@@ -30,6 +30,16 @@
 
 // Frame delay (ms)
 //#define reward_delay 200 //14//20
+/*
+    number of bins for current angle of the pole
+    number of bins for the force to be applied
+    mass of the cart
+    mass of the pole
+    initial starting angle
+    velocity of the cart
+    velocity of the pendulum
+    base rate for the neurons to fire in each bin
+*/
 
 //----------------------------------------------------------------------------
 // Enumerations
@@ -37,9 +47,9 @@
 typedef enum
 {
   REGION_SYSTEM,
-  REGION_BANDIT,
+  REGION_PENDULUM,
   REGION_RECORDING,
-  REGION_ARMS,
+  REGION_DATA,
 } region_t;
 
 typedef enum
@@ -177,7 +187,7 @@ static bool initialize(uint32_t *timer_period)
     }
 
     address_t arms_region = data_specification_get_region(REGION_ARMS, address);
-    reward_delay = arms_region[0];
+     = arms_region[0];
     number_of_arms = arms_region[1];
 //    rand_seed = arms_region[2];
     kiss_seed[0] = arms_region[2];
