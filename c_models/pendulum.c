@@ -32,13 +32,16 @@
 //#define reward_delay 200 //14//20
 /*
     number of bins for current angle of the pole
-    number of bins for the force to be applied
+    number of bins for the force to be applied or number of spikes per tick equals a force
     mass of the cart
     mass of the pole
     initial starting angle
     velocity of the cart
     velocity of the pendulum
     base rate for the neurons to fire in each bin
+    each spike equals a change in force to be applied (what is that amount)
+    receptive field of each bin
+    update model on each timer tick and on each spike received, or number of spikes per tick equals a force
 */
 
 //----------------------------------------------------------------------------
@@ -59,16 +62,10 @@ typedef enum
   SPECIAL_EVENT_MAX,
 } special_event_t;
 
-typedef enum
+typedef enum // forward will be considered positive motion
 {
-  KEY_ARM_0  = 0x0,
-  KEY_ARM_1  = 0x1,
-  KEY_ARM_2  = 0x2,
-  KEY_ARM_3  = 0x3,
-  KEY_ARM_4  = 0x4,
-  KEY_ARM_5  = 0x5,
-  KEY_ARM_6  = 0x6,
-  KEY_ARM_7  = 0x7,
+  BACKWARD_MOTOR  = 0x0,
+  FORWARD_MOTOR  = 0x1,
 } arm_key_t;
 
 //----------------------------------------------------------------------------
@@ -97,6 +94,15 @@ int32_t best_arm = -1;
 bool chose_well = false;
 int32_t reward_based = 1;
 int32_t correct_pulls = 0;
+
+int max_motor_force = 10;
+int min_motor_force = -10;
+int motor_force = 0;
+int force_increment = (max_motor_force - min_motor_force) / 100;
+int max_pole_angle = 36;
+int min_pole_angle = -36;
+int pole_angle = 0;
+int pole_length = 1;
 
 uint32_t reward_delay;
 
@@ -301,6 +307,16 @@ bool was_there_a_reward(){
     }
 }
 
+// updates the current state of the pendulum
+bool update_state(){
+    if ('in bounds'){
+        return true;
+    }
+    else{
+        return false;
+    }
+}
+
 void mc_packet_received_callback(uint key, uint payload)
 {
     uint32_t compare;
@@ -309,32 +325,17 @@ void mc_packet_received_callback(uint key, uint payload)
 //    io_printf(IO_BUF, "key = %x\n", key);
 //    io_printf(IO_BUF, "payload = %x\n", payload);
     use(payload);
-    if(compare == KEY_ARM_0){
-        arm_choices[0]++;
+    if(compare == BACKWARD_MOTOR){
+        motor_force = motor_force - motor_increment;
+        if (motor_force < min_motor_force){
+            motor_force = min_motor_force;
+        }
     }
-    else if(compare == KEY_ARM_1){
-        arm_choices[1]++;
-    }
-    else if(compare == KEY_ARM_2){
-        arm_choices[2]++;
-    }
-    else if(compare == KEY_ARM_3){
-        arm_choices[3]++;
-    }
-    else if(compare == KEY_ARM_4){
-        arm_choices[4]++;
-    }
-    else if(compare == KEY_ARM_5){
-        arm_choices[5]++;
-    }
-    else if(compare == KEY_ARM_6){
-        arm_choices[6]++;
-    }
-    else if(compare == KEY_ARM_7){
-        arm_choices[7]++;
-    }
-    else {
-//        io_printf(IO_BUF, "it broke arm selection %d\n", key);
+    else if(compare == FORWARD_MOTOR){
+        motor_force = motor_force + motor_increment;
+        if (motor_force > max_motor_force){
+            motor_force = max_motor_force;
+        }
     }
 }
 

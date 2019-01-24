@@ -19,9 +19,9 @@ class BanditMachineVertex(MachineVertex):
     _BANDIT_REGIONS = Enum(
         value="_BANDIT_REGIONS",
         names=[('SYSTEM', 0),
-               ('BANDIT', 1),
+               ('PENDULUM', 1),
                ('RECORDING', 2),
-               ('ARMS', 3)])
+               ('DATA', 3)])
 
     def __init__(self, resources_required, constraints=None, label=None):
         # Superclasses
