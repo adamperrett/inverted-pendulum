@@ -4,7 +4,7 @@ import os
 
 
 # Build a list of all project modules, as well as supplementary files
-main_package = "spinn_bandit"
+main_package = "spinn_pendulum"
 extensions = {".aplx", ".boot", ".cfg", ".json", ".sql", ".template", ".xml",
               ".xsd"}
 main_package_dir = os.path.join(os.path.dirname(__file__), main_package)

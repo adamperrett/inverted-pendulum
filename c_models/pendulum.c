@@ -21,6 +21,7 @@
 #include <data_specification.h>
 #include <simulation.h>
 #include "random.h"
+#include <math.h>
 
 #include <recording.h>
 
@@ -42,6 +43,8 @@
     each spike equals a change in force to be applied (what is that amount)
     receptive field of each bin
     update model on each timer tick and on each spike received, or number of spikes per tick equals a force
+
+    add option to rate (increased poisson P()) code and rank code
 */
 
 //----------------------------------------------------------------------------
@@ -95,14 +98,31 @@ bool chose_well = false;
 int32_t reward_based = 1;
 int32_t correct_pulls = 0;
 
-int max_motor_force = 10;
-int min_motor_force = -10;
-int motor_force = 0;
-int force_increment = (max_motor_force - min_motor_force) / 100;
+// experimental constraints and variables
+float current_time = 0;
+float max_motor_force = 10;
+float min_motor_force = -10;
+float motor_force = 0;
+float force_increment = 0;
+float cart_position = 0;
+float cart_velocity = 0; // angular
+float cart_acceleration = 0; // angular
 int max_pole_angle = 36;
 int min_pole_angle = -36;
-int pole_angle = 0;
-int pole_length = 1;
+float pole_angle = 0;
+float pole_velocity = 0;
+float pole_acceleration = 0;
+
+int max_firing_rate = 20;
+int encoding_scheme = 0; // 0: rate, 1: time, 2: rank (replace with type def
+
+// experimental parameters
+float half_pole_length = 0.5; // m
+float gravity = 9.8; // m/s^2
+float mass_cart = 1; // kg
+float mass_pole = 0.1; // kg
+float friction_cart_on_track = 0.0005; // coefficient of friction
+float friction_pole_hinge = 0.000002; // coefficient of friction
 
 uint32_t reward_delay;
 
@@ -176,7 +196,7 @@ static bool initialize(uint32_t *timer_period)
 
 
     // Read breakout region
-    address_t breakout_region = data_specification_get_region(REGION_BANDIT, address);
+    address_t breakout_region = data_specification_get_region(REGION_PENDULUM, address);
     key = breakout_region[0];
     io_printf(IO_BUF, "\tKey=%08x\n", key);
     io_printf(IO_BUF, "\tTimer period=%d\n", *timer_period);
@@ -192,8 +212,8 @@ static bool initialize(uint32_t *timer_period)
        return false;
     }
 
-    address_t arms_region = data_specification_get_region(REGION_ARMS, address);
-     = arms_region[0];
+    address_t arms_region = data_specification_get_region(REGION_DATA, address);
+    encoding_scheme = arms_region[0];
     number_of_arms = arms_region[1];
 //    rand_seed = arms_region[2];
     kiss_seed[0] = arms_region[2];
@@ -225,6 +245,8 @@ static bool initialize(uint32_t *timer_period)
 //    io_printf(IO_BUF, "r6 0x%x\n", *arm_probabilities);
 //    io_printf(IO_BUF, "r6 0x%x\n", &arm_probabilities);
 
+    force_increment = (float)((max_motor_force - min_motor_force) / (float)100);
+
     int highest_prob = 0;
     for(int i=0; i<number_of_arms; i=i+1){
         if(arm_probabilities[i] > highest_prob){
@@ -236,6 +258,7 @@ static bool initialize(uint32_t *timer_period)
     io_printf(IO_BUF, "Initialise: completed successfully\n");
     io_printf(IO_BUF, "best arm = %d with prob %d\n", best_arm, highest_prob);
 
+    current_time = 0;
     return true;
 }
 
@@ -308,7 +331,38 @@ bool was_there_a_reward(){
 }
 
 // updates the current state of the pendulum
-bool update_state(){
+bool update_state(float time_step){
+    float effective_force_pole_on_cart = 0;
+    float pole_angle_force = (mass_pole * half_pole_length * pole_velocity * pole_velocity * sin(pole_angle));
+    float angle_scalar = ((3.0f / 4.0f) * mass_pole * cos(pole_angle));
+    float friction_and_gravity = (((friction_pole_hinge * pole_velocity) / (mass_pole * half_pole_length)) +
+                        (gravity * sin(pole_angle)));
+    float effective_pole_mass = mass_pole * (1.0f - ((3.0f / 4.0f) * cos(pole_angle) * cos(pole_angle)));
+
+    effective_force_pole_on_cart = pole_angle_force + (angle_scalar * friction_and_gravity);
+    if (cart_velocity > 0){
+        cart_acceleration = (motor_force - friction_cart_on_track + effective_force_pole_on_cart) /
+                                (mass_cart + effective_pole_mass);
+    }
+    else{
+        cart_acceleration = (motor_force + friction_cart_on_track + effective_force_pole_on_cart) /
+                                (mass_cart + effective_pole_mass);
+    }
+
+    float length_scalar = (-3.0f / 4.0f * half_pole_length);
+    float cart_acceleration_effect = cart_acceleration * cos(pole_angle);
+    float gravity_effect = gravity * sin(pole_angle);
+    float friction_effect = (friction_pole_hinge * pole_velocity) / (mass_pole * half_pole_length);
+    pole_acceleration = length_scalar * (cart_acceleration_effect + gravity_effect + friction_effect);
+
+    cart_velocity = (cart_acceleration * time_step) + cart_velocity;
+    cart_position = (cart_velocity * time_step) + cart_position;
+
+    pole_velocity = (pole_acceleration * time_step) + pole_velocity;
+    pole_position = (pole_velocity * time_step) + pole_position;
+
+    if (cart_position)
+
     if ('in bounds'){
         return true;
     }
@@ -326,13 +380,13 @@ void mc_packet_received_callback(uint key, uint payload)
 //    io_printf(IO_BUF, "payload = %x\n", payload);
     use(payload);
     if(compare == BACKWARD_MOTOR){
-        motor_force = motor_force - motor_increment;
+        motor_force = motor_force - force_increment;
         if (motor_force < min_motor_force){
             motor_force = min_motor_force;
         }
     }
     else if(compare == FORWARD_MOTOR){
-        motor_force = motor_force + motor_increment;
+        motor_force = motor_force + force_increment;
         if (motor_force > max_motor_force){
             motor_force = max_motor_force;
         }
