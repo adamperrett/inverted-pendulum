@@ -62,9 +62,10 @@ typedef enum
 
 typedef enum
 {
-  SPECIAL_EVENT_REWARD,
-  SPECIAL_EVENT_NO_REWARD,
-  SPECIAL_EVENT_MAX,
+  SPECIAL_EVENT_ANGLE,
+  SPECIAL_EVENT_ANGLE_V,
+  SPECIAL_EVENT_CART,
+  SPECIAL_EVENT_CART_V,
 } special_event_t;
 
 typedef enum // forward will be considered positive motion
@@ -97,15 +98,19 @@ float track_length = 4.8; // m
 float cart_position = 0; // m
 float cart_velocity = 0;  // m/s
 float cart_acceleration = 0;  // m/s^2
+float highend_cart_v = 5; // used to calculate firing rate and bins
 int max_pole_angle = 36;
 int min_pole_angle = -36;
 float pole_angle = 1;
 float pole_velocity = 0; // angular/s
 float pole_acceleration = 0; // angular/s^2
+float highend_pole_v = 10; // used to calculate firing rate and bins
 
 int max_firing_rate = 20;
+float max_firing_prob = 0;
 int encoding_scheme = 0; // 0: rate, 1: time, 2: rank (replace with type def
 int number_of_bins = 20;
+int central = 1; // if it's central that mean perfectly central on the track and angle is the lowest rate, else half
 
 // experimental parameters
 float half_pole_length = 0.5; // m
@@ -135,18 +140,28 @@ uint32_t score_change_count=0;
 //----------------------------------------------------------------------------
 // Inline functions
 //----------------------------------------------------------------------------
-static inline void add_reward()
+static inline void spike_angle()
 {
-  spin1_send_mc_packet(key | (SPECIAL_EVENT_REWARD), 0, NO_PAYLOAD);
-  io_printf(IO_BUF, "Got a reward\n");
-  current_score++;
+  spin1_send_mc_packet(key | (SPECIAL_EVENT_ANGLE), 0, NO_PAYLOAD);
+//  io_printf(IO_BUF, "Got a reward\n");
 }
 
-static inline void add_no_reward()
+static inline void spike_angle_v()
 {
-  spin1_send_mc_packet(key | (SPECIAL_EVENT_NO_REWARD), 0, NO_PAYLOAD);
-  io_printf(IO_BUF, "No reward\n");
-  current_score--;
+  spin1_send_mc_packet(key | (SPECIAL_EVENT_ANGLE_V), 0, NO_PAYLOAD);
+//  io_printf(IO_BUF, "Got a reward\n");
+}
+
+static inline void spike_cart()
+{
+  spin1_send_mc_packet(key | (SPECIAL_EVENT_CART), 0, NO_PAYLOAD);
+//  io_printf(IO_BUF, "Got a reward\n");
+}
+
+static inline void spike_cart_v()
+{
+  spin1_send_mc_packet(key | (SPECIAL_EVENT_CART_V), 0, NO_PAYLOAD);
+//  io_printf(IO_BUF, "Got a reward\n");
 }
 
 void resume_callback() {
@@ -208,6 +223,8 @@ static bool initialize(uint32_t *timer_period)
        return false;
     }
 
+    cart_position = track_length / 2;
+
     address_t pend_region = data_specification_get_region(REGION_DATA, address);
 //    encoding_scheme = pend_region[0]; // 0 rate
     encoding_scheme = pend_region[0];
@@ -218,7 +235,14 @@ static bool initialize(uint32_t *timer_period)
     force_increment = pend_region[5];
     max_firing_rate = pend_region[6];
     number_of_bins = pend_region[7];
-    
+
+    max_firing_prob = max_firing_rate / 1000;
+
+    kiss_seed[0] = pend_region[8];
+    kiss_seed[1] = pend_region[9];
+    kiss_seed[2] = pend_region[10];
+    kiss_seed[3] = pend_region[11];
+    validate_mars_kiss64_seed(kiss_seed);
 
     force_increment = (float)((max_motor_force - min_motor_force) / (float)force_increment);
     
@@ -286,6 +310,9 @@ bool update_state(float time_step){
     pole_velocity = (pole_acceleration * time_step) + pole_velocity;
     pole_angle = (pole_velocity * time_step) + pole_angle;
 
+    io_printf(IO_BUF, "pole (d,v,a):(%d, %d, %d) and cart (d,v,a):(%d, %d, %d)\n", pole_angle, pole_velocity,
+                        pole_acceleration, cart_position, pole_velocity, pole_acceleration);
+
     if (abs(cart_position) > (track_length / 2.0f) || abs(pole_angle) > max_pole_angle) {
         return false;
     }
@@ -313,6 +340,53 @@ void mc_packet_received_callback(uint key, uint payload)
         if (motor_force > max_motor_force){
             motor_force = max_motor_force;
         }
+    }
+}
+
+void send_status(){
+    if (encoding_scheme == 0){
+        float relative_cart = 0;
+        float relative_angle = 0;
+        float relative_cart_velocity = 0;
+        float relative_angular_velocity = 0;
+        if (central){
+            relative_angle = abs(pole_angle) / max_pole_angle;
+            relative_angular_velocity = abs(pole_velocity) / highend_pole_v;
+            relative_cart = abs(cart_position) / (track_length / 2);
+            relative_cart_velocity = abs(cart_velocity) / (highend_cart_v);
+        }
+        else{
+            relative_angle = (pole_angle - min_pole_angle) / (max_pole_angle - min_pole_angle);
+            relative_angular_velocity = (pole_velocity + highend_pole_v) / (highend_pole_v * 2);
+            relative_cart = cart_position / track_length;
+            relative_cart_velocity = (cart_velocity + highend_cart_v) / (highend_cart_v * 2);
+        }
+        io_printf(IO_BUF, "relative angle, v %d, %d and cart, v %d, %d\n", relative_angle, relative_angular_velocity,
+                            relative_cart, relative_cart_velocity);
+        float angle_roll = 0;
+        float angle_roll_v = 0;
+        float cart_roll = 0;
+        float cart_roll_v = 0;
+        angle_roll = (float)(mars_kiss64_seed(kiss_seed) / 0xffffffff);
+        angle_roll_v = (float)(mars_kiss64_seed(kiss_seed) / 0xffffffff);
+        cart_roll = (float)(mars_kiss64_seed(kiss_seed) / 0xffffffff);
+        cart_roll_v = (float)(mars_kiss64_seed(kiss_seed) / 0xffffffff);
+        io_printf(IO_BUF, "roll angle, v %d, %d and cart, v %d, %d\n", angle_roll, angle_roll_v, cart_roll, cart_roll_v);
+        if (angle_roll > max_firing_prob){
+            spike_angle();
+        }
+        if (angle_roll_v > max_firing_prob){
+            spike_angle_v();
+        }
+        if (cart_roll > max_firing_prob){
+            spike_cart();
+        }
+        if (cart_roll_v > max_firing_prob){
+            spike_cart_v();
+        }
+    }
+    else{
+        io_printf(IO_BUF, "some stuff with bins here\n");
     }
 }
 
@@ -347,6 +421,7 @@ void timer_callback(uint unused, uint dummy)
     // Otherwise
     else
     {
+        send_status();
         if (tick_in_frame == 0){
             update_state(0);
             // possibly use this to allow updating of time whenever

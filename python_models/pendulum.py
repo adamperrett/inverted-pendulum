@@ -55,8 +55,8 @@ from spinn_front_end_common.abstract_models\
    .abstract_provides_n_keys_for_partition \
    import AbstractProvidesNKeysForPartition
 
-# Bandit imports
-from bandit_machine_vertex import BanditMachineVertex
+# Pendulum imports
+from pendulum_machine_vertex import PendulumMachineVertex
 
 import numpy
 
@@ -64,19 +64,11 @@ from data_specification.enums.data_type import DataType
 
 NUMPY_DATA_ELEMENT_TYPE = numpy.double
 
-# ----------------------------------------------------------------------------
-# Bandit
-# ----------------------------------------------------------------------------
-# **HACK** for Projection to connect a synapse type is required
-# class BanditSynapseType(object):
-#     def get_synapse_id_by_target(self, target):
-#         return 0
-
 
 # ----------------------------------------------------------------------------
-# Bandit
+# Pendulum
 # ----------------------------------------------------------------------------
-class Bandit(ApplicationVertex,
+class Pendulum(ApplicationVertex,
                 AbstractGeneratesDataSpecification,
                 AbstractHasAssociatedBinary,
                 AbstractProvidesOutgoingPartitionConstraints,
@@ -90,7 +82,7 @@ class Bandit(ApplicationVertex,
     def get_connections_from_machine(self, transceiver, placement, edge, graph_mapper,
                                      routing_infos, synapse_information, machine_time_step):
 
-        super(Bandit, self).get_connections_from_machine(transceiver, placement, edge,
+        super(Pendulum, self).get_connections_from_machine(transceiver, placement, edge,
                                                            graph_mapper, routing_infos,
                                                            synapse_information,
                                                            machine_time_step)
@@ -99,13 +91,7 @@ class Bandit(ApplicationVertex,
         pass
 
     def add_pre_run_connection_holder(self, connection_holder, projection_edge, synapse_information):
-        super(Bandit, self).add_pre_run_connection_holder(connection_holder, projection_edge, synapse_information)
-
-    # def get_binary_start_type(self):
-    #     super(Bandit, self).get_binary_start_type()
-    #
-    # def requires_mapping(self):
-    #     pass
+        super(Pendulum, self).add_pre_run_connection_holder(connection_holder, projection_edge, synapse_information)
 
     def clear_connection_cache(self):
         pass
@@ -118,8 +104,8 @@ class Bandit(ApplicationVertex,
     def get_synapse_id_by_target(self, target):
         return 0
 
-    BANDIT_REGION_BYTES = 24
-    ARMS_REGION_BYTES = 80
+    PENDULUM_REGION_BYTES = 24
+    DATA_REGION_BYTES = 80
     MAX_SIM_DURATION = 1000 * 60 * 60 * 24 * 7 # 1 week
 
     # parameters expected by PyNN
@@ -133,12 +119,12 @@ class Bandit(ApplicationVertex,
         'force_increments': 100,
         'max_firing_rate': 100,
         'number_of_bins': 20,
+        'central': 1,
         'label': "pole",
         'incoming_spike_buffer_size': None,
         'duration': MAX_SIM_DURATION}
 
     # **HACK** for Projection to connect a synapse type is required
-    # synapse_type = BanditSynapseType()
 
     def __init__(self, constraints=default_parameters['constraints'],
                  encoding=default_parameters['encoding'],
@@ -149,6 +135,7 @@ class Bandit(ApplicationVertex,
                  force_increments=default_parameters['force_increments'],
                  max_firing_rate=default_parameters['max_firing_rate'],
                  number_of_bins=default_parameters['number_of_bins'],
+                 central=default_parameters['central'],
                  label=default_parameters['label'],
                  incoming_spike_buffer_size=default_parameters['incoming_spike_buffer_size'],
                  simulation_duration_ms=default_parameters['duration']):
@@ -168,12 +155,15 @@ class Bandit(ApplicationVertex,
         # for rate based it's only 1 neuron per metric (position, angle, velocity of both)
         if self._encoding == 0:
             self._n_neurons = 4
+        else:
+            print "number of keys reserved needs to be increased"
 
         self._time_increment = time_increment
         self._reward_based = reward_based
 
         self._max_firing_rate = max_firing_rate
         self._number_of_bins = number_of_bins
+        self._central = central
 
         # used to define size of recording region
         self._recording_size = int((simulation_duration_ms / 1000.) * 4)
@@ -201,7 +191,7 @@ class Bandit(ApplicationVertex,
         return self._n_neurons
 
     def get_maximum_delay_supported_in_ms(self, machine_time_step):
-        # Bandit has no synapses so can simulate only one time step of delay
+        # Pendulum has no synapses so can simulate only one time step of delay
         return machine_time_step / 1000.0
 
     #    def get_max_atoms_per_core(self):
@@ -215,7 +205,7 @@ class Bandit(ApplicationVertex,
         # **HACK** only way to force no partitioning is to zero dtcm and cpu
         container = ResourceContainer(
             sdram=SDRAMResource(
-                self.BANDIT_REGION_BYTES +
+                self.PENDULUM_REGION_BYTES +
                 front_end_common_constants.SYSTEM_BYTES_REQUIREMENT),
             dtcm=DTCMResource(0),
             cpu_cycles=CPUCyclesPerTickResource(0))
@@ -226,7 +216,7 @@ class Bandit(ApplicationVertex,
     def create_machine_vertex(self, vertex_slice, resources_required,
                               label=None, constraints=None):
         # Return suitable machine vertex
-        return BanditMachineVertex(resources_required, constraints, self._label)
+        return PendulumMachineVertex(resources_required, constraints, self._label)
 
     @property
     @overrides(ApplicationVertex.n_atoms)
@@ -253,45 +243,45 @@ class Bandit(ApplicationVertex,
         vertex = placement.vertex
         vertex_slice = graph_mapper.get_slice(vertex)
 
-        spec.comment("\n*** Spec for Bandit Instance ***\n\n")
+        spec.comment("\n*** Spec for Pendulum Instance ***\n\n")
         spec.comment("\nReserving memory space for data regions:\n\n")
 
         # Reserve memory:
         spec.reserve_memory_region(
-            region=BanditMachineVertex._BANDIT_REGIONS.SYSTEM.value,
+            region=PendulumMachineVertex._PENDULUM_REGIONS.SYSTEM.value,
             size=front_end_common_constants.SYSTEM_BYTES_REQUIREMENT,
             label='setup')
         spec.reserve_memory_region(
-            region=BanditMachineVertex._BANDIT_REGIONS.BANDIT.value,
-            size=self.BANDIT_REGION_BYTES, label='BanditParams')
+            region=PendulumMachineVertex._PENDULUM_REGIONS.PENDULUM.value,
+            size=self.PENDULUM_REGION_BYTES, label='PendulumVertex')
         # vertex.reserve_provenance_data_region(spec)
         # reserve recording region
         spec.reserve_memory_region(
-            BanditMachineVertex._BANDIT_REGIONS.RECORDING.value,
+            PendulumMachineVertex._PENDULUM_REGIONS.RECORDING.value,
             recording_utilities.get_recording_header_size(1))
         spec.reserve_memory_region(
-            region=BanditMachineVertex._BANDIT_REGIONS.ARMS.value,
-            size=self.ARMS_REGION_BYTES, label='BanditArms')
+            region=PendulumMachineVertex._PENDULUM_REGIONS.DATA.value,
+            size=self.DATA_REGION_BYTES, label='PendulumData')
 
         # Write setup region
         spec.comment("\nWriting setup region:\n")
         spec.switch_write_focus(
-            BanditMachineVertex._BANDIT_REGIONS.SYSTEM.value)
+            PendulumMachineVertex._PENDULUM_REGIONS.SYSTEM.value)
         spec.write_array(simulation_utilities.get_simulation_header_array(
             self.get_binary_file_name(), machine_time_step,
             time_scale_factor))
 
-        # Write bandit region containing routing key to transmit with
-        spec.comment("\nWriting bandit region:\n")
+        # Write pendulum region containing routing key to transmit with
+        spec.comment("\nWriting pendulum region:\n")
         spec.switch_write_focus(
-            BanditMachineVertex._BANDIT_REGIONS.BANDIT.value)
+            PendulumMachineVertex._PENDULUM_REGIONS.PENDULUM.value)
         spec.write_value(routing_info.get_first_key_from_pre_vertex(
             vertex, constants.SPIKE_PARTITION_ID))
 
         # Write recording region for score
-        spec.comment("\nWriting bandit recording region:\n")
+        spec.comment("\nWriting pendulum recording region:\n")
         spec.switch_write_focus(
-            BanditMachineVertex._BANDIT_REGIONS.RECORDING.value)
+            PendulumMachineVertex._PENDULUM_REGIONS.RECORDING.value)
         ip_tags = tags.get_ip_tags_for_vertex(self) or []
         spec.write_array(recording_utilities.get_recording_header_array(
             [self._recording_size], ip_tags=ip_tags))
@@ -299,7 +289,7 @@ class Bandit(ApplicationVertex,
         # Write probabilites for arms
         spec.comment("\nWriting arm probability region region:\n")
         spec.switch_write_focus(
-            BanditMachineVertex._BANDIT_REGIONS.ARMS.value)
+            PendulumMachineVertex._PENDULUM_REGIONS.DATA.value)
         ip_tags = tags.get_ip_tags_for_vertex(self) or []
         spec.write_value(self._encoding, data_type=DataType.UINT32)
         spec.write_value(self._time_increment, data_type=DataType.UINT32)
@@ -309,6 +299,7 @@ class Bandit(ApplicationVertex,
         spec.write_value(self._force_increments, data_type=DataType.FLOAT_32)
         spec.write_value(self._max_firing_rate, data_type=DataType.UINT32)
         spec.write_value(self._number_of_bins, data_type=DataType.UINT32)
+        spec.write_value(self._central, data_type=DataType.UINT32)
 
         # End-of-Spec:
         spec.end_specification()
@@ -318,7 +309,7 @@ class Bandit(ApplicationVertex,
     # ------------------------------------------------------------------------
     @overrides(AbstractHasAssociatedBinary.get_binary_file_name)
     def get_binary_file_name(self):
-        return "bandit.aplx"
+        return "pendulum.aplx"
 
     @overrides(AbstractHasAssociatedBinary.get_binary_start_type)
     def get_binary_start_type(self):

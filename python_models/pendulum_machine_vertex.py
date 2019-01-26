@@ -15,9 +15,9 @@ from spinn_front_end_common.utilities import helpful_functions, constants
 # ----------------------------------------------------------------------------
 # BanditMachineVertex
 # ----------------------------------------------------------------------------
-class BanditMachineVertex(MachineVertex):
-    _BANDIT_REGIONS = Enum(
-        value="_BANDIT_REGIONS",
+class PendulumMachineVertex(MachineVertex):
+    _PENDULUM_REGIONS = Enum(
+        value="_PENDULUM_REGIONS",
         names=[('SYSTEM', 0),
                ('PENDULUM', 1),
                ('RECORDING', 2),
