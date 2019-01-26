@@ -22,6 +22,8 @@
 #include <simulation.h>
 #include "random.h"
 #include <math.h>
+//#include <chrono>
+//using namespace std::chrono;
 
 #include <recording.h>
 
@@ -30,7 +32,7 @@
 //----------------------------------------------------------------------------
 
 // Frame delay (ms)
-//#define reward_delay 200 //14//20
+//#define time_increment 200 //14//20
 /*
     number of bins for current angle of the pole
     number of bins for the force to be applied or number of spikes per tick equals a force
@@ -80,41 +82,30 @@ static uint32_t _time;
 //! Should simulation run for ever? 0 if not
 static uint32_t infinite_run;
 
-const int max_number_of_arms = 8;
-
-uint32_t *arm_probabilities;
-
 mars_kiss64_seed_t kiss_seed;
 
-int number_of_arms;
-
-int rand_seed;
-
-int arm_choices[8] = {0};
-
 int32_t current_score = 0;
-int32_t best_arm = -1;
-bool chose_well = false;
 int32_t reward_based = 1;
-int32_t correct_pulls = 0;
 
 // experimental constraints and variables
 float current_time = 0;
-float max_motor_force = 10;
-float min_motor_force = -10;
+float max_motor_force = 10; // N
+float min_motor_force = -10; // N
 float motor_force = 0;
-float force_increment = 0;
-float cart_position = 0;
-float cart_velocity = 0; // angular
-float cart_acceleration = 0; // angular
+float force_increment = 100;
+float track_length = 4.8; // m
+float cart_position = 0; // m
+float cart_velocity = 0;  // m/s
+float cart_acceleration = 0;  // m/s^2
 int max_pole_angle = 36;
 int min_pole_angle = -36;
-float pole_angle = 0;
-float pole_velocity = 0;
-float pole_acceleration = 0;
+float pole_angle = 1;
+float pole_velocity = 0; // angular/s
+float pole_acceleration = 0; // angular/s^2
 
 int max_firing_rate = 20;
 int encoding_scheme = 0; // 0: rate, 1: time, 2: rank (replace with type def
+int number_of_bins = 20;
 
 // experimental parameters
 float half_pole_length = 0.5; // m
@@ -124,7 +115,12 @@ float mass_pole = 0.1; // kg
 float friction_cart_on_track = 0.0005; // coefficient of friction
 float friction_pole_hinge = 0.000002; // coefficient of friction
 
-uint32_t reward_delay;
+float max_balance_time = 0;
+
+float current_state[2];
+bool in_bounds = true;
+
+uint32_t time_increment;
 
 //! How many ticks until next frame
 static uint32_t tick_in_frame = 0;
@@ -212,122 +208,51 @@ static bool initialize(uint32_t *timer_period)
        return false;
     }
 
-    address_t arms_region = data_specification_get_region(REGION_DATA, address);
-    encoding_scheme = arms_region[0];
-    number_of_arms = arms_region[1];
-//    rand_seed = arms_region[2];
-    kiss_seed[0] = arms_region[2];
-    kiss_seed[1] = arms_region[3];
-    kiss_seed[2] = arms_region[4];
-    kiss_seed[3] = arms_region[5];
-    reward_based = arms_region[6];
-    arm_probabilities = (uint32_t *)&arms_region[7];
-//    double arm_probabilities[10] = {0}
-//    for (int i=1, i<number_of_arms, i=i+1){
-//        io_printf(IO_BUF, "converting arm prob %d, stage \n", temp_arm_probabilities[i] i)
-//        arm_probabilities[i] = (double)temp_arm_probabilities[i] / 1000.0
-//        io_printf(IO_BUF, "probs after = %d\n", arm_probabilities)
-//    }
-    validate_mars_kiss64_seed(rand_seed);
-//    srand(rand_seed);
+    address_t pend_region = data_specification_get_region(REGION_DATA, address);
+//    encoding_scheme = pend_region[0]; // 0 rate
+    encoding_scheme = pend_region[0];
+    time_increment = pend_region[1];
+    half_pole_length = pend_region[2] / 2;
+    pole_angle = pend_region[3];
+    reward_based = pend_region[4];
+    force_increment = pend_region[5];
+    max_firing_rate = pend_region[6];
+    number_of_bins = pend_region[7];
+    
+
+    force_increment = (float)((max_motor_force - min_motor_force) / (float)force_increment);
+    
     //TODO check this prints right, ybug read the address
-    io_printf(IO_BUF, "r1 %d\n", (uint32_t *)arms_region[0]);
-    io_printf(IO_BUF, "r2 %d\n", (uint32_t *)arms_region[1]);
-    io_printf(IO_BUF, "rand3. %d\n", (uint32_t *)arms_region[2]);
-    io_printf(IO_BUF, "rand3 0x%x\n", (uint32_t *)arms_region[3]);
-    io_printf(IO_BUF, "r4 0x%x\n", arms_region[3]);
-    io_printf(IO_BUF, "r5 0x%x\n", arm_probabilities);
-    io_printf(IO_BUF, "r6 %u\n", arm_probabilities[0]);
-    io_printf(IO_BUF, "r6d %d\n", arm_probabilities[0]);
-    io_printf(IO_BUF, "r7 %u\n", arm_probabilities[1]);
-    io_printf(IO_BUF, "r7d %d\n", arm_probabilities[1]);
+    io_printf(IO_BUF, "r1 %d\n", (uint32_t *)pend_region[0]);
+    io_printf(IO_BUF, "r2 %d\n", (uint32_t *)pend_region[1]);
+    io_printf(IO_BUF, "rand3. %d\n", (uint32_t *)pend_region[2]);
+    io_printf(IO_BUF, "rand3 0x%x\n", (uint32_t *)pend_region[3]);
+    io_printf(IO_BUF, "r4 0x%x\n", pend_region[3]);
+    io_printf(IO_BUF, "r5 0x%x\n", pend_region);
+    io_printf(IO_BUF, "r6 %u\n", pend_region[0]);
+    io_printf(IO_BUF, "r6d %d\n", pend_region[0]);
+    io_printf(IO_BUF, "r7 %u\n", pend_region[1]);
+    io_printf(IO_BUF, "r7d %d\n", pend_region[1]);
+    io_printf(IO_BUF, "r2 %u\n", pend_region[2]);
+    io_printf(IO_BUF, "r2d %d\n", pend_region[2]);
+    io_printf(IO_BUF, "r3 %u\n", pend_region[3]);
+    io_printf(IO_BUF, "r3d %d\n", pend_region[3]);
+    io_printf(IO_BUF, "r4 %u\n", pend_region[4]);
+    io_printf(IO_BUF, "r4d %d\n", pend_region[4]);
+    io_printf(IO_BUF, "r5 %u\n", pend_region[5]);
+    io_printf(IO_BUF, "r5d %d\n", pend_region[5]);
+    io_printf(IO_BUF, "r6 %u\n", pend_region[6]);
+    io_printf(IO_BUF, "r6d %d\n", pend_region[6]);
+    io_printf(IO_BUF, "r7 %u\n", pend_region[7]);
+    io_printf(IO_BUF, "r7d %d\n", pend_region[7]);
     io_printf(IO_BUF, "re %d\n", reward_based);
-//    io_printf(IO_BUF, "r6 0x%x\n", *arm_probabilities);
-//    io_printf(IO_BUF, "r6 0x%x\n", &arm_probabilities);
-
-    force_increment = (float)((max_motor_force - min_motor_force) / (float)100);
-
-    int highest_prob = 0;
-    for(int i=0; i<number_of_arms; i=i+1){
-        if(arm_probabilities[i] > highest_prob){
-            best_arm = i;
-            highest_prob = arm_probabilities[i];
-        }
-    }
+//    io_printf(IO_BUF, "r6 0x%x\n", *pend_region);
+//    io_printf(IO_BUF, "r6 0x%x\n", &pend_region);
 
     io_printf(IO_BUF, "Initialise: completed successfully\n");
-    io_printf(IO_BUF, "best arm = %d with prob %d\n", best_arm, highest_prob);
 
-    current_time = 0;
+//    auto start = chrono::steady_clock::now();
     return true;
-}
-
-bool was_there_a_reward(){
-    int choice = -1; //mars_kiss64_seed(kiss_seed) % number_of_arms;
-//    int choice = rand() % number_of_arms;
-    int highest_value = 0;
-    int min_spikes = 100000000;
-    for(int i=0; i<number_of_arms; i=i+1){
-        if(arm_choices[i] < min_spikes){
-            min_spikes = arm_choices[i];
-        }
-    }
-    for(int i=0; i<number_of_arms; i=i+1){
-        arm_choices[i] = arm_choices[i] - min_spikes;
-    }
-    if(arm_choices[0] > highest_value){
-        choice = 0;
-        highest_value = arm_choices[0];
-    }
-//    io_printf(IO_BUF, "0 was spiked %d times, prob = %u\n", arm_choices[0], arm_probabilities[0]);
-    arm_choices[0] = 0;
-    for(int i=1; i<number_of_arms; i=i+1){
-        if (arm_choices[i] >= highest_value && arm_choices[i] != 0){
-            if(arm_choices[i] == highest_value){
-                if (mars_kiss64_seed(kiss_seed) % 2 == 0){
-//                if (rand() % 2 == 0){
-                    choice = i;
-                    highest_value = arm_choices[i];
-                }
-            }
-            else{
-                choice = i;
-                highest_value = arm_choices[i];
-            }
-        }
-//        io_printf(IO_BUF, "%d was spiked %d times, prob = %u\n", i, arm_choices[i], arm_probabilities[i]);
-        arm_choices[i] = 0;
-    }
-//    io_printf(IO_BUF, "choice was %d and best arm was %d, score is %d, highest value: %d", choice, best_arm, current_score, highest_value);
-    if(choice == best_arm){
-        correct_pulls++;
-    }
-    else{
-        correct_pulls--;
-    }
-    if(highest_value == 0){
-        return false;
-    }
-    else{
-        uint32_t probability_roll;
-    //    double max = RAND_MAX;
-//        io_printf(IO_BUF, "rand = %d, max = %d\n", rand_no, RAND_MAX);
-        probability_roll = mars_kiss64_seed(kiss_seed);
-    //    probability_roll = rand();
-//        io_printf(IO_BUF, "prob_roll = %u\n", probability_roll);
-//        io_printf(IO_BUF, "roll was %u and prob was %u, max = %u %d\n", probability_roll, arm_probabilities[choice], RAND_MAX, RAND_MAX);
-        if(probability_roll < arm_probabilities[choice]){
-    //        io_printf(IO_BUF, "reward given\n");
-            return true;
-        }
-        else if(probability_roll > arm_probabilities[choice]){
-    //        io_printf(IO_BUF, "no cigar\n");
-            return false;
-        }
-        else{
-    //        io_printf(IO_BUF, "shit broke\n");
-        }
-    }
 }
 
 // updates the current state of the pendulum
@@ -359,15 +284,13 @@ bool update_state(float time_step){
     cart_position = (cart_velocity * time_step) + cart_position;
 
     pole_velocity = (pole_acceleration * time_step) + pole_velocity;
-    pole_position = (pole_velocity * time_step) + pole_position;
+    pole_angle = (pole_velocity * time_step) + pole_angle;
 
-    if (cart_position)
-
-    if ('in bounds'){
-        return true;
+    if (abs(cart_position) > (track_length / 2.0f) || abs(pole_angle) > max_pole_angle) {
+        return false;
     }
     else{
-        return false;
+        return true;
     }
 }
 
@@ -424,26 +347,31 @@ void timer_callback(uint unused, uint dummy)
     // Otherwise
     else
     {
+        if (tick_in_frame == 0){
+            update_state(0);
+            // possibly use this to allow updating of time whenever
+//            auto start = chrono::steady_clock::now();
+        }
         // Increment ticks in frame counter and if this has reached frame delay
         tick_in_frame++;
-        if(tick_in_frame == reward_delay)
+        if(tick_in_frame == time_increment)
         {
-            if (was_there_a_reward()){
-                add_reward();
-            }
-            else{
-                add_no_reward();
+            if (in_bounds){
+                max_balance_time = (float)_time;
+                in_bounds = update_state((float)time_increment / 1000.f);
             }
             // Reset ticks in frame and update frame
             tick_in_frame = 0;
 //            update_frame();
             // Update recorded score every 1s
             if(score_change_count>=1000){
+                current_state[0] = cart_position;
+                current_state[1] = pole_angle;
                 if(reward_based == 0){
-                    recording_record(0, &correct_pulls, 4);
+                    recording_record(0, &current_state, 4);
                 }
                 else{
-                    recording_record(0, &current_score, 4);
+                    recording_record(0, &max_balance_time, 4);
                 }
                 score_change_count=0;
             }

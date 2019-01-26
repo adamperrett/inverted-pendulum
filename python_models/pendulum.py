@@ -124,46 +124,56 @@ class Bandit(ApplicationVertex,
 
     # parameters expected by PyNN
     default_parameters = {
-        'reward_delay': 200.0,
         'constraints': None,
-        'rate': 1.0,
+        'encoding': 0,  # 0 rate, 1 receptive bins, 2 spike time, 3 rank
+        'time_increment': 20,
+        'pole_length': 1.0,
+        'pole_angle': 1.0,
         'reward_based': 1,
-        'label': "Bandit",
+        'force_increments': 100,
+        'max_firing_rate': 100,
+        'number_of_bins': 20,
+        'label': "pole",
         'incoming_spike_buffer_size': None,
-        'duration': MAX_SIM_DURATION,
-        'arms': [0.1, 0.9],
-        'random_seed': [numpy.random.randint(10000), numpy.random.randint(10000),
-                        numpy.random.randint(10000), numpy.random.randint(10000)]}
+        'duration': MAX_SIM_DURATION}
 
     # **HACK** for Projection to connect a synapse type is required
     # synapse_type = BanditSynapseType()
 
-    def __init__(self, arms=default_parameters['arms'],
-                 reward_delay=default_parameters['reward_delay'],
+    def __init__(self, constraints=default_parameters['constraints'],
+                 encoding=default_parameters['encoding'],
+                 time_increment=default_parameters['time_increment'],
+                 pole_length=default_parameters['pole_length'],
+                 pole_angle=default_parameters['pole_angle'],
                  reward_based=default_parameters['reward_based'],
-                 constraints=default_parameters['constraints'],
+                 force_increments=default_parameters['force_increments'],
+                 max_firing_rate=default_parameters['max_firing_rate'],
+                 number_of_bins=default_parameters['number_of_bins'],
                  label=default_parameters['label'],
                  incoming_spike_buffer_size=default_parameters['incoming_spike_buffer_size'],
-                 simulation_duration_ms=default_parameters['duration'],
-                 rand_seed=default_parameters['random_seed']):
+                 simulation_duration_ms=default_parameters['duration']):
         # **NOTE** n_neurons currently ignored - width and height will be
         # specified as additional parameters, forcing their product to be
         # duplicated in n_neurons seems pointless
 
         self._label = label
 
+        self._encoding = encoding
+
         # Pass in variables
-        arms_list = []
-        for arm in arms:
-            arms_list.append(numpy.uint32(arm*0xffffffff))
-        self._arms = arms_list
+        self._pole_length = pole_length
+        self._pole_angle = pole_angle
 
-        self._no_arms = len(arms)
-        self._n_neurons = self._no_arms
-        self._rand_seed = rand_seed
+        self._force_increments= force_increments
+        # for rate based it's only 1 neuron per metric (position, angle, velocity of both)
+        if self._encoding == 0:
+            self._n_neurons = 4
 
-        self._reward_delay = reward_delay
+        self._time_increment = time_increment
         self._reward_based = reward_based
+
+        self._max_firing_rate = max_firing_rate
+        self._number_of_bins = number_of_bins
 
         # used to define size of recording region
         self._recording_size = int((simulation_duration_ms / 1000.) * 4)
@@ -291,17 +301,14 @@ class Bandit(ApplicationVertex,
         spec.switch_write_focus(
             BanditMachineVertex._BANDIT_REGIONS.ARMS.value)
         ip_tags = tags.get_ip_tags_for_vertex(self) or []
-        spec.write_value(self._reward_delay, data_type=DataType.UINT32)
-        spec.write_value(self._no_arms, data_type=DataType.UINT32)
-        spec.write_value(self._rand_seed[0], data_type=DataType.UINT32)
-        spec.write_value(self._rand_seed[1], data_type=DataType.UINT32)
-        spec.write_value(self._rand_seed[2], data_type=DataType.UINT32)
-        spec.write_value(self._rand_seed[3], data_type=DataType.UINT32)
+        spec.write_value(self._encoding, data_type=DataType.UINT32)
+        spec.write_value(self._time_increment, data_type=DataType.UINT32)
+        spec.write_value(self._pole_length, data_type=DataType.FLOAT_32)
+        spec.write_value(self._pole_angle, data_type=DataType.FLOAT_32)
         spec.write_value(self._reward_based, data_type=DataType.UINT32)
-        # Write the data - Arrays must be 32-bit values, so convert
-        data = numpy.array(self._arms, dtype=numpy.uint32)
-        spec.write_array(data.view(numpy.uint32))
-
+        spec.write_value(self._force_increments, data_type=DataType.FLOAT_32)
+        spec.write_value(self._max_firing_rate, data_type=DataType.UINT32)
+        spec.write_value(self._number_of_bins, data_type=DataType.UINT32)
 
         # End-of-Spec:
         spec.end_specification()
