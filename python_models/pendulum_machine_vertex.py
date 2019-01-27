@@ -37,4 +37,4 @@ class PendulumMachineVertex(MachineVertex):
 
     def get_recording_region_base_address(self, txrx, placement):
         return helpful_functions.locate_memory_region_for_placement(
-            placement, self._BANDIT_REGIONS.RECORDING.value, txrx)
+            placement, self._PENDULUM_REGIONS.RECORDING.value, txrx)

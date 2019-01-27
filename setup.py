@@ -30,7 +30,7 @@ setup(
     version="0.1.1",
     license="GNU GPLv3.0",
     packages=find_packages(),
-    package_data=package_data,  # {'invertedPendulum.model_binaries': ['*.aplx']},
+    package_data={'model_binaries': ['*.aplx']},
     install_requires=['spynnaker8', "numpy",],
     classifiers = [
         "Operating System :: POSIX :: Linux",

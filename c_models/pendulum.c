@@ -229,10 +229,12 @@ static bool initialize(uint32_t *timer_period)
 //    encoding_scheme = pend_region[0]; // 0 rate
     encoding_scheme = pend_region[0];
     time_increment = pend_region[1];
-    half_pole_length = pend_region[2] / 2;
-    pole_angle = pend_region[3];
+    half_pole_length = (float)(pend_region[2] / 0xffff);
+    io_printf(IO_BUF, "half %d\n", half_pole_length);
+    half_pole_length = half_pole_length / 2.0f;
+    pole_angle = (float)pend_region[3]; // ((float)pend_region[3] / (float)0xffffffff); //
     reward_based = pend_region[4];
-    force_increment = pend_region[5];
+    force_increment = pend_region[5]; // (float)pend_region[5] / (float)0xffff;
     max_firing_rate = pend_region[6];
     number_of_bins = pend_region[7];
 
@@ -253,21 +255,25 @@ static bool initialize(uint32_t *timer_period)
     io_printf(IO_BUF, "rand3 0x%x\n", (uint32_t *)pend_region[3]);
     io_printf(IO_BUF, "r4 0x%x\n", pend_region[3]);
     io_printf(IO_BUF, "r5 0x%x\n", pend_region);
-    io_printf(IO_BUF, "r6 %u\n", pend_region[0]);
-    io_printf(IO_BUF, "r6d %d\n", pend_region[0]);
-    io_printf(IO_BUF, "r7 %u\n", pend_region[1]);
+    io_printf(IO_BUF, "encode %u\n", pend_region[0]);
+    io_printf(IO_BUF, "d %d\n", pend_region[0]);
+    io_printf(IO_BUF, "increm %u\n", pend_region[1]);
     io_printf(IO_BUF, "r7d %d\n", pend_region[1]);
-    io_printf(IO_BUF, "r2 %u\n", pend_region[2]);
+    io_printf(IO_BUF, "halfp %u\n", pend_region[2]);
     io_printf(IO_BUF, "r2d %d\n", pend_region[2]);
-    io_printf(IO_BUF, "r3 %u\n", pend_region[3]);
+    io_printf(IO_BUF, "half %u\n", half_pole_length);
+    io_printf(IO_BUF, "r2d %d\n", half_pole_length);
+    io_printf(IO_BUF, "anglep %u\n", pend_region[3]);
     io_printf(IO_BUF, "r3d %d\n", pend_region[3]);
-    io_printf(IO_BUF, "r4 %u\n", pend_region[4]);
+    io_printf(IO_BUF, "angle %u\n", pole_angle);
+    io_printf(IO_BUF, "r3d %d\n", pole_angle);
+    io_printf(IO_BUF, "reward %u\n", pend_region[4]);
     io_printf(IO_BUF, "r4d %d\n", pend_region[4]);
-    io_printf(IO_BUF, "r5 %u\n", pend_region[5]);
+    io_printf(IO_BUF, "force %u\n", pend_region[5]);
     io_printf(IO_BUF, "r5d %d\n", pend_region[5]);
-    io_printf(IO_BUF, "r6 %u\n", pend_region[6]);
+    io_printf(IO_BUF, "max %u\n", pend_region[6]);
     io_printf(IO_BUF, "r6d %d\n", pend_region[6]);
-    io_printf(IO_BUF, "r7 %u\n", pend_region[7]);
+    io_printf(IO_BUF, "bins %u\n", pend_region[7]);
     io_printf(IO_BUF, "r7d %d\n", pend_region[7]);
     io_printf(IO_BUF, "re %d\n", reward_based);
 //    io_printf(IO_BUF, "r6 0x%x\n", *pend_region);
