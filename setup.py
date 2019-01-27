@@ -4,7 +4,7 @@ import os
 
 
 # Build a list of all project modules, as well as supplementary files
-main_package = "spinn_pendulum"
+main_package = "inverted-pendulum"
 extensions = {".aplx", ".boot", ".cfg", ".json", ".sql", ".template", ".xml",
               ".xsd"}
 main_package_dir = os.path.join(os.path.dirname(__file__), main_package)
@@ -30,7 +30,7 @@ setup(
     version="0.1.1",
     license="GNU GPLv3.0",
     packages=find_packages(),
-    package_data={'inverted-pendulum.model_binaries': ['*.aplx']},
+    package_data=package_data,  # {'invertedPendulum.model_binaries': ['*.aplx']},
     install_requires=['spynnaker8', "numpy",],
     classifiers = [
         "Operating System :: POSIX :: Linux",
