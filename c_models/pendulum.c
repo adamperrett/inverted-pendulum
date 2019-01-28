@@ -22,6 +22,7 @@
 #include <simulation.h>
 #include "random.h"
 #include <math.h>
+#include <common/maths-util.h>
 //#include <chrono>
 //using namespace std::chrono;
 
@@ -74,6 +75,12 @@ typedef enum // forward will be considered positive motion
   FORWARD_MOTOR  = 0x1,
 } arm_key_t;
 
+typedef union{
+   uint32_t u;
+   float f;
+   accum a;
+} uint_float_union;
+
 //----------------------------------------------------------------------------
 // Globals
 //----------------------------------------------------------------------------
@@ -105,6 +112,8 @@ float pole_angle = 1;
 float pole_velocity = 0; // angular/s
 float pole_acceleration = 0; // angular/s^2
 float highend_pole_v = 10; // used to calculate firing rate and bins
+
+uint_float_union good_pole_angle;
 
 int max_firing_rate = 20;
 float max_firing_prob = 0;
@@ -229,21 +238,30 @@ static bool initialize(uint32_t *timer_period)
 //    encoding_scheme = pend_region[0]; // 0 rate
     encoding_scheme = pend_region[0];
     time_increment = pend_region[1];
-    half_pole_length = (float)(pend_region[2] / 0xffff);
-    io_printf(IO_BUF, "half %d\n", half_pole_length);
+    half_pole_length = (float)((float)pend_region[2] / (float)0xffff);
+//    io_printf(IO_BUF, "half %f, norm %f, half %f\n", half_pole_length, pend_region[2], pend_region[2]/2.0f);
     half_pole_length = half_pole_length / 2.0f;
+    good_pole_angle.u = pend_region[3];
+    accum temp_angle = pend_region[3];
+    float new_angle = (float)(temp_angle);
+    accum newer_angle = (accum)(pend_region[3]);
+    accum test1 = 0.1k;
+    io_printf(IO_BUF, "angle %k, divided %k test %k\n", temp_angle, newer_angle, test1);
+    io_printf(IO_BUF, "good angle u %u, a %k, f %f\n", good_pole_angle.u, good_pole_angle.a, good_pole_angle.f);
     pole_angle = (float)pend_region[3]; // ((float)pend_region[3] / (float)0xffffffff); //
     reward_based = pend_region[4];
     force_increment = pend_region[5]; // (float)pend_region[5] / (float)0xffff;
     max_firing_rate = pend_region[6];
     number_of_bins = pend_region[7];
+    central = pend_region[8];
 
     max_firing_prob = max_firing_rate / 1000;
-
-    kiss_seed[0] = pend_region[8];
-    kiss_seed[1] = pend_region[9];
-    kiss_seed[2] = pend_region[10];
-    kiss_seed[3] = pend_region[11];
+//    accum
+    // pass in random seeds
+    kiss_seed[0] = pend_region[9];
+    kiss_seed[1] = pend_region[10];
+    kiss_seed[2] = pend_region[11];
+    kiss_seed[3] = pend_region[12];
     validate_mars_kiss64_seed(kiss_seed);
 
     force_increment = (float)((max_motor_force - min_motor_force) / (float)force_increment);
@@ -258,23 +276,25 @@ static bool initialize(uint32_t *timer_period)
     io_printf(IO_BUF, "encode %u\n", pend_region[0]);
     io_printf(IO_BUF, "d %d\n", pend_region[0]);
     io_printf(IO_BUF, "increm %u\n", pend_region[1]);
-    io_printf(IO_BUF, "r7d %d\n", pend_region[1]);
-    io_printf(IO_BUF, "halfp %u\n", pend_region[2]);
-    io_printf(IO_BUF, "r2d %d\n", pend_region[2]);
-    io_printf(IO_BUF, "half %u\n", half_pole_length);
-    io_printf(IO_BUF, "r2d %d\n", half_pole_length);
-    io_printf(IO_BUF, "anglep %u\n", pend_region[3]);
-    io_printf(IO_BUF, "r3d %d\n", pend_region[3]);
-    io_printf(IO_BUF, "angle %u\n", pole_angle);
-    io_printf(IO_BUF, "r3d %d\n", pole_angle);
+    io_printf(IO_BUF, "d %d\n", pend_region[1]);
+    io_printf(IO_BUF, "halfp %f\n", pend_region[2]);
+    io_printf(IO_BUF, "d %f\n", pend_region[2]);
+    io_printf(IO_BUF, "half %f\n", half_pole_length);
+    io_printf(IO_BUF, "d %f\n", half_pole_length);
+    io_printf(IO_BUF, "anglep %f\n", pend_region[3]);
+    io_printf(IO_BUF, "d %f\n", pend_region[3]);
+    io_printf(IO_BUF, "angle %f\n", pole_angle);
+    io_printf(IO_BUF, "d %f\n", pole_angle);
     io_printf(IO_BUF, "reward %u\n", pend_region[4]);
-    io_printf(IO_BUF, "r4d %d\n", pend_region[4]);
+    io_printf(IO_BUF, "d %d\n", pend_region[4]);
     io_printf(IO_BUF, "force %u\n", pend_region[5]);
-    io_printf(IO_BUF, "r5d %d\n", pend_region[5]);
+    io_printf(IO_BUF, "d %d\n", pend_region[5]);
     io_printf(IO_BUF, "max %u\n", pend_region[6]);
-    io_printf(IO_BUF, "r6d %d\n", pend_region[6]);
+    io_printf(IO_BUF, "d %d\n", pend_region[6]);
     io_printf(IO_BUF, "bins %u\n", pend_region[7]);
-    io_printf(IO_BUF, "r7d %d\n", pend_region[7]);
+    io_printf(IO_BUF, "d %d\n", pend_region[7]);
+    io_printf(IO_BUF, "central %u\n", pend_region[7]);
+    io_printf(IO_BUF, "d %d\n", pend_region[7]);
     io_printf(IO_BUF, "re %d\n", reward_based);
 //    io_printf(IO_BUF, "r6 0x%x\n", *pend_region);
 //    io_printf(IO_BUF, "r6 0x%x\n", &pend_region);

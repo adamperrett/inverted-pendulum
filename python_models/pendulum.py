@@ -114,12 +114,13 @@ class Pendulum(ApplicationVertex,
         'encoding': 0,  # 0 rate, 1 receptive bins, 2 spike time, 3 rank
         'time_increment': 20,
         'pole_length': 1.0,
-        'pole_angle': 1.0,
+        'pole_angle': 0.1,
         'reward_based': 1,
         'force_increments': 100,
         'max_firing_rate': 100,
         'number_of_bins': 20,
         'central': 1,
+        'rand_seed': [0, 1, 2, 3],
         'label': "pole",
         'incoming_spike_buffer_size': None,
         'duration': MAX_SIM_DURATION}
@@ -136,6 +137,7 @@ class Pendulum(ApplicationVertex,
                  max_firing_rate=default_parameters['max_firing_rate'],
                  number_of_bins=default_parameters['number_of_bins'],
                  central=default_parameters['central'],
+                 rand_seed=default_parameters['rand_seed'],
                  label=default_parameters['label'],
                  incoming_spike_buffer_size=default_parameters['incoming_spike_buffer_size'],
                  simulation_duration_ms=default_parameters['duration']):
@@ -164,6 +166,7 @@ class Pendulum(ApplicationVertex,
         self._max_firing_rate = max_firing_rate
         self._number_of_bins = number_of_bins
         self._central = central
+        self._rand_seed = rand_seed
 
         # used to define size of recording region
         self._recording_size = int((simulation_duration_ms / 1000.) * 4)
@@ -293,15 +296,20 @@ class Pendulum(ApplicationVertex,
         ip_tags = tags.get_ip_tags_for_vertex(self) or []
         spec.write_value(self._encoding, data_type=DataType.UINT32)
         spec.write_value(self._time_increment, data_type=DataType.UINT32)
-        new_length = numpy.uint32(self._pole_length*0xffffffff)
-        spec.write_value(numpy.uint32(self._pole_length * 0xffffffff), data_type=DataType.UINT32)
-        new_angle = numpy.float(self._pole_angle)
-        spec.write_value(new_angle, data_type=DataType.FLOAT_32)
+        new_length = numpy.uint32(self._pole_length*0xffff)
+        spec.write_value(numpy.uint32(self._pole_length * 0xffff), data_type=DataType.UINT32)
+        # new_angle = numpy.int(self._pole_angle * 0x7fffffff)
+        # spec.write_value(numpy.uint32(new_angle), data_type=DataType.UINT32)
+        spec.write_value(self._pole_angle, data_type=DataType.S1615)
         spec.write_value(self._reward_based, data_type=DataType.UINT32)
         spec.write_value(self._force_increments, data_type=DataType.UINT32)
         spec.write_value(self._max_firing_rate, data_type=DataType.UINT32)
         spec.write_value(self._number_of_bins, data_type=DataType.UINT32)
         spec.write_value(self._central, data_type=DataType.UINT32)
+        spec.write_value(self._rand_seed[0], data_type=DataType.UINT32)
+        spec.write_value(self._rand_seed[1], data_type=DataType.UINT32)
+        spec.write_value(self._rand_seed[2], data_type=DataType.UINT32)
+        spec.write_value(self._rand_seed[3], data_type=DataType.UINT32)
 
         # End-of-Spec:
         spec.end_specification()
