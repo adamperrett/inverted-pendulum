@@ -29,8 +29,8 @@ def connect_to_arms(pre_pop, from_list, arms, r_type, plastic, stdp_model):
                 p.Projection(pre_pop, arms[i], p.FromListConnector(arm_conn_list[i]),
                              receptor_type=r_type)
 
-reward = 1
-runtime = 41000
+
+runtime = 21000
 exposure_time = 200
 encoding = 0
 time_increment = 20
@@ -62,10 +62,14 @@ input_model = Pendulum(encoding=encoding,
 
 pendulum_pop_size = input_model.neurons()
 pendulum = p.Population(pendulum_pop_size, input_model)
+null_pop = p.Population(1, p.IF_cond_exp(), label='null')
+p.Projection(pendulum, null_pop, p.AllToAllConnector())
 
 arm_collection = []
 input_spikes = []
 rates = [10, 0]
+# rates = [0, 10]
+print 'rates = ', rates
 for j in range(outputs):
     arm_collection.append(p.Population(int(np.ceil(np.log2(outputs))),
                                        Arm(arm_id=j, reward_delay=exposure_time,
@@ -73,6 +77,7 @@ for j in range(outputs):
                                            no_arms=outputs, arm_prob=1),
                                            label='arm_pop{}'.format(j)))
     p.Projection(arm_collection[j], pendulum, p.AllToAllConnector(), p.StaticSynapse())
+    # p.Projection(null_pop, arm_collection[j], p.AllToAllConnector())
     input_spikes.append(p.Population(1, p.SpikeSourcePoisson(rate=rates[j])))
     p.Projection(input_spikes[j], arm_collection[j], p.AllToAllConnector(), p.StaticSynapse())
 
@@ -83,4 +88,5 @@ scores = []
 scores.append(get_scores(game_pop=pendulum, simulator=simulator))
 print scores
 
+print 'rates = ', rates
 p.end()

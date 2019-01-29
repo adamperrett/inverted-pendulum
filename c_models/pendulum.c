@@ -87,6 +87,8 @@ typedef union{
 
 static uint32_t _time;
 
+int number_of_updates = 0;
+
 //! Should simulation run for ever? 0 if not
 static uint32_t infinite_run;
 
@@ -130,13 +132,13 @@ int central = 1; // if it's central that mean perfectly central on the track and
 // experimental parameters
 uint_float_union half_pole_length_accum; // m
 float half_pole_length; // m
-float gravity = 9.8; // m/s^2
+float gravity = -9.8; // m/s^2
 float mass_cart = 1; // kg
 float mass_pole = 0.1; // kg
 float friction_cart_on_track = 0.0005; // coefficient of friction
 float friction_pole_hinge = 0.000002; // coefficient of friction
 
-float max_balance_time = 0;
+int max_balance_time = 0;
 
 float current_state[2];
 bool in_bounds = true;
@@ -277,7 +279,7 @@ static bool initialize(uint32_t *timer_period)
     number_of_bins = pend_region[7];
     central = pend_region[8];
 
-    max_firing_prob = max_firing_rate / 1000;
+    max_firing_prob = max_firing_rate / 1000.f;
 //    accum
     // pass in random seeds
     kiss_seed[0] = pend_region[9];
@@ -326,7 +328,7 @@ static bool initialize(uint32_t *timer_period)
 //    io_printf(IO_BUF, "r6 0x%x\n", &pend_region);
 
     io_printf(IO_BUF, "starting state (d,v,a):(%k, %k, %k) and cart (d,v,a):(%k, %k, %k)\n", (accum)pole_angle, (accum)pole_velocity,
-                        (accum)pole_acceleration, (accum)cart_position, (accum)pole_velocity, (accum)pole_acceleration);
+                        (accum)pole_acceleration, (accum)cart_position, (accum)cart_velocity, (accum)cart_acceleration);
 
     io_printf(IO_BUF, "Initialise: completed successfully\n");
 
@@ -353,7 +355,7 @@ bool update_state(float time_step){
                                 (mass_cart + effective_pole_mass);
     }
 
-    float length_scalar = (-3.0f / 4.0f * half_pole_length);
+    float length_scalar = -3.0f / (4.0f * half_pole_length);
     float cart_acceleration_effect = cart_acceleration * cos(pole_angle);
     float gravity_effect = gravity * sin(pole_angle);
     float friction_effect = (friction_pole_hinge * pole_velocity) / (mass_pole * half_pole_length);
@@ -365,10 +367,13 @@ bool update_state(float time_step){
     pole_velocity = (pole_acceleration * time_step) + pole_velocity;
     pole_angle = (pole_velocity * time_step) + pole_angle;
 
+//    io_printf(IO_BUF, "motor force = %k\n", (accum)motor_force);
+//    io_printf(IO_BUF, "max_pole_angle = %k, abs = %k\n", (accum)max_pole_angle, (accum)(abs(pole_angle)));
     io_printf(IO_BUF, "pole (d,v,a):(%k, %k, %k) and cart (d,v,a):(%k, %k, %k)\n", (accum)pole_angle, (accum)pole_velocity,
-                        (accum)pole_acceleration, (accum)cart_position, (accum)pole_velocity, (accum)pole_acceleration);
+                        (accum)pole_acceleration, (accum)cart_position, (accum)cart_velocity, (accum)cart_acceleration);
 
-    if (abs(cart_position) > (track_length / 2.0f) || abs(pole_angle) > max_pole_angle) {
+    if (cart_position > track_length || cart_position < 0  || pole_angle > max_pole_angle  || pole_angle < min_pole_angle) {
+        io_printf(IO_BUF, "failed out\n");
         return false;
     }
     else{
@@ -381,8 +386,6 @@ void mc_packet_received_callback(uint key, uint payload)
     uint32_t compare;
     compare = key & 0x7;
 //    io_printf(IO_BUF, "compare = %x\n", compare);
-//    io_printf(IO_BUF, "key = %x\n", key);
-//    io_printf(IO_BUF, "payload = %x\n", payload);
     use(payload);
     if(compare == BACKWARD_MOTOR){
         motor_force = motor_force - force_increment;
@@ -405,10 +408,30 @@ void send_status(){
         float relative_cart_velocity = 0;
         float relative_angular_velocity = 0;
         if (central){
-            relative_angle = abs(pole_angle) / max_pole_angle;
-            relative_angular_velocity = abs(pole_velocity) / highend_pole_v;
-            relative_cart = abs(cart_position) / (track_length / 2.0f);
-            relative_cart_velocity = abs(cart_velocity) / (highend_cart_v);
+            if (pole_angle > 0){
+                relative_angle = pole_angle / max_pole_angle;
+            }
+            else{
+                relative_angle = -pole_angle / max_pole_angle;
+            }
+            if (pole_velocity > 0){
+                relative_angular_velocity = pole_velocity / highend_pole_v;
+            }
+            else{
+                relative_angular_velocity = -pole_velocity / highend_pole_v;
+            }
+            if (cart_position - (track_length / 2.0f) > 0){
+                relative_cart = (cart_position - (track_length / 2.0f)) / (track_length / 2.0f);
+            }
+            else{
+                relative_cart = -(cart_position - (track_length / 2.0f)) / (track_length / 2.0f);
+            }
+            if (cart_velocity > 0){
+                relative_cart_velocity = cart_velocity / (highend_cart_v);
+            }
+            else{
+                relative_cart_velocity = -cart_velocity / (highend_cart_v);
+            }
         }
         else{
             relative_angle = (pole_angle - min_pole_angle) / (max_pole_angle - min_pole_angle);
@@ -416,8 +439,8 @@ void send_status(){
             relative_cart = cart_position / track_length;
             relative_cart_velocity = (cart_velocity + highend_cart_v) / (highend_cart_v * 2.f);
         }
-//        io_printf(IO_BUF, "relative (angle, v) (%k, %k) and (cart, v) (%k, %k)\n", (accum)relative_angle, (accum)relative_angular_velocity,
-//                            (accum)relative_cart, (accum)relative_cart_velocity);
+        io_printf(IO_BUF, "relative (angle, v) (%k, %k) and (cart, v) (%k, %k)\n", (accum)relative_angle,
+                            (accum)relative_angular_velocity, (accum)relative_cart, (accum)relative_cart_velocity);
         float angle_roll = 0;
         float angle_roll_v = 0;
         float cart_roll = 0;
@@ -426,18 +449,26 @@ void send_status(){
         angle_roll_v = (float)(mars_kiss64_seed(kiss_seed) / (float)0xffffffff);
         cart_roll = (float)(mars_kiss64_seed(kiss_seed) / (float)0xffffffff);
         cart_roll_v = (float)(mars_kiss64_seed(kiss_seed) / (float)0xffffffff);
-//        io_printf(IO_BUF, "roll (angle, v) (%k, %k) and (cart, v) %k, %k\n", (accum)angle_roll, (accum)angle_roll_v,
-//                                                                        (accum)cart_roll, (accum)cart_roll_v);
-        if (angle_roll > max_firing_prob){
+        io_printf(IO_BUF, "roll (angle, v) (%k, %k) and (cart, v) %k, %k wth max = %k\n", (accum)angle_roll,
+                                                                        (accum)angle_roll_v, (accum)cart_roll,
+                                                                        (accum)cart_roll_v, (accum)max_firing_prob);
+        angle_roll = angle_roll / relative_angle;
+        angle_roll_v = angle_roll_v / relative_angular_velocity;
+        cart_roll = cart_roll / relative_cart_velocity;
+        cart_roll_v = cart_roll_v / relative_cart_velocity;
+        io_printf(IO_BUF, "relative roll (angle, v) (%k, %k) and (cart, v) %k, %k wth max = %k\n", (accum)angle_roll,
+                                                                        (accum)angle_roll_v, (accum)cart_roll,
+                                                                        (accum)cart_roll_v, (accum)max_firing_prob);
+        if (angle_roll < max_firing_prob){
             spike_angle();
         }
-        if (angle_roll_v > max_firing_prob){
+        if (angle_roll_v < max_firing_prob){
             spike_angle_v();
         }
-        if (cart_roll > max_firing_prob){
+        if (cart_roll < max_firing_prob){
             spike_cart();
         }
-        if (cart_roll_v > max_firing_prob){
+        if (cart_roll_v < max_firing_prob){
             spike_cart_v();
         }
     }
@@ -477,7 +508,6 @@ void timer_callback(uint unused, uint dummy)
     // Otherwise
     else
     {
-        send_status();
         if (_time == 0){
             update_state(0);
             // possibly use this to allow updating of time whenever
@@ -488,14 +518,17 @@ void timer_callback(uint unused, uint dummy)
         if(tick_in_frame == time_increment)
         {
             if (in_bounds){
-                max_balance_time = (float)_time;
+//                max_balance_time = (float)_time;
+                max_balance_time = max_balance_time + 1;
                 in_bounds = update_state((float)time_increment / 1000.f);
             }
+            number_of_updates = number_of_updates + 1;
+//            io_printf(IO_BUF, "update:%d\n", number_of_updates);
             // Reset ticks in frame and update frame
             tick_in_frame = 0;
 //            update_frame();
-            // Update recorded score every 1s
-            if(score_change_count>=1000){
+            // Update recorded score every 0.1s
+            if(score_change_count>=100){
                 current_state[0] = cart_position;
                 current_state[1] = pole_angle;
                 if(reward_based == 0){
@@ -506,6 +539,9 @@ void timer_callback(uint unused, uint dummy)
                 }
                 score_change_count=0;
             }
+        }
+        if (in_bounds){
+            send_status();
         }
     }
 //    io_printf(IO_BUF, "time %u\n", ticks);
@@ -540,6 +576,7 @@ void c_main(void)
   spin1_set_timer_tick(timer_period);
 
   io_printf(IO_BUF, "simulation_ticks %d\n",simulation_ticks);
+  io_printf(IO_BUF, "timer tick %d, %k\n",TIMER_TICK, (accum)TIMER_TICK);
 
   // Register callback
   spin1_callback_on(TIMER_TICK, timer_callback, 2);
