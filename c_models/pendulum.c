@@ -106,14 +106,20 @@ float cart_position = 0; // m
 float cart_velocity = 0;  // m/s
 float cart_acceleration = 0;  // m/s^2
 float highend_cart_v = 5; // used to calculate firing rate and bins
-int max_pole_angle = 36;
-int min_pole_angle = -36;
-float pole_angle = 1;
+float max_pole_angle = (36.0f / 180.f) * M_PI;
+float min_pole_angle = -(36.0f / 180.f) * M_PI;
+uint_float_union pole_angle_accum;
+float pole_angle;
 float pole_velocity = 0; // angular/s
 float pole_acceleration = 0; // angular/s^2
 float highend_pole_v = 10; // used to calculate firing rate and bins
 
-uint_float_union good_pole_angle;
+uint_float_union convert1;
+uint_float_union convert2;
+uint_float_union convert3;
+uint_float_union convert4;
+uint_float_union convert5;
+uint_float_union convert6;
 
 int max_firing_rate = 20;
 float max_firing_prob = 0;
@@ -122,7 +128,8 @@ int number_of_bins = 20;
 int central = 1; // if it's central that mean perfectly central on the track and angle is the lowest rate, else half
 
 // experimental parameters
-float half_pole_length = 0.5; // m
+uint_float_union half_pole_length_accum; // m
+float half_pole_length; // m
 float gravity = 9.8; // m/s^2
 float mass_cart = 1; // kg
 float mass_pole = 0.1; // kg
@@ -238,17 +245,32 @@ static bool initialize(uint32_t *timer_period)
 //    encoding_scheme = pend_region[0]; // 0 rate
     encoding_scheme = pend_region[0];
     time_increment = pend_region[1];
-    half_pole_length = (float)((float)pend_region[2] / (float)0xffff);
-//    io_printf(IO_BUF, "half %f, norm %f, half %f\n", half_pole_length, pend_region[2], pend_region[2]/2.0f);
-    half_pole_length = half_pole_length / 2.0f;
-    good_pole_angle.u = pend_region[3];
-    accum temp_angle = pend_region[3];
-    float new_angle = (float)(temp_angle);
-    accum newer_angle = (accum)(pend_region[3]);
-    accum test1 = 0.1k;
-    io_printf(IO_BUF, "angle %k, divided %k test %k\n", temp_angle, newer_angle, test1);
-    io_printf(IO_BUF, "good angle u %u, a %k, f %f\n", good_pole_angle.u, good_pole_angle.a, good_pole_angle.f);
-    pole_angle = (float)pend_region[3]; // ((float)pend_region[3] / (float)0xffffffff); //
+    half_pole_length_accum.u = pend_region[2];
+//    half_pole_length = (float)(half_pole_length_accum.a);
+    io_printf(IO_BUF, "half %u, norm %k, half %f\n", (accum)half_pole_length, (accum)half_pole_length, (accum)half_pole_length);
+//    half_pole_length_accum.a = half_pole_length_accum.a / 2.0k;
+    half_pole_length = half_pole_length_accum.f / 2.0f;
+    io_printf(IO_BUF, "half %u, norm %k, half %f\n", (accum)half_pole_length, (accum)half_pole_length, (accum)half_pole_length);
+    half_pole_length = half_pole_length_accum.u / 2.0f;
+    io_printf(IO_BUF, "half %u, norm %k, half %f\n", (accum)half_pole_length, (accum)half_pole_length, (accum)half_pole_length);
+    half_pole_length = half_pole_length_accum.a / 2.0f;
+    io_printf(IO_BUF, "half %u, norm %k, half %f\n", (accum)half_pole_length, (accum)half_pole_length, (accum)half_pole_length);
+    pole_angle_accum.u = pend_region[3];
+    pole_angle = pole_angle_accum.a;
+    io_printf(IO_BUF, "angle d %k\n", (accum)pole_angle);
+    io_printf(IO_BUF, "pi %k\n", (accum)M_PI);
+    io_printf(IO_BUF, "180 %k\n", (accum)(pole_angle / 180.0f));
+    pole_angle = (pole_angle / 180.0f) * M_PI;
+    io_printf(IO_BUF, "angle r %k\n", (accum)pole_angle);
+//    pole_angle = (float)(pole_angle_accum.a);
+//    accum temp_angle = pend_region[3];
+//    float new_angle = (float)(temp_angle);
+//    accum newer_angle = (accum)(pend_region[3]);
+//    accum test1 = 0.1k;
+//    io_printf(IO_BUF, "angle %k, divided %k test %k\n", temp_angle, newer_angle, test1);
+//    io_printf(IO_BUF, "good angle u %u, a %k, f %f\n", pole_angle_accum.u, pole_angle_accum.a, pole_angle_accum.f);
+    io_printf(IO_BUF, "angle u %u, a %k, f %f\n", pole_angle, pole_angle, pole_angle);
+//    pole_angle = (float)pend_region[3]; // ((float)pend_region[3] / (float)0xffffffff); //
     reward_based = pend_region[4];
     force_increment = pend_region[5]; // (float)pend_region[5] / (float)0xffff;
     max_firing_rate = pend_region[6];
@@ -265,7 +287,7 @@ static bool initialize(uint32_t *timer_period)
     validate_mars_kiss64_seed(kiss_seed);
 
     force_increment = (float)((max_motor_force - min_motor_force) / (float)force_increment);
-    
+
     //TODO check this prints right, ybug read the address
     io_printf(IO_BUF, "r1 %d\n", (uint32_t *)pend_region[0]);
     io_printf(IO_BUF, "r2 %d\n", (uint32_t *)pend_region[1]);
@@ -279,12 +301,16 @@ static bool initialize(uint32_t *timer_period)
     io_printf(IO_BUF, "d %d\n", pend_region[1]);
     io_printf(IO_BUF, "halfp %f\n", pend_region[2]);
     io_printf(IO_BUF, "d %f\n", pend_region[2]);
-    io_printf(IO_BUF, "half %f\n", half_pole_length);
-    io_printf(IO_BUF, "d %f\n", half_pole_length);
+    io_printf(IO_BUF, "half %k\n", (accum)half_pole_length);
+    io_printf(IO_BUF, "d %f\n", (float)half_pole_length);
+    io_printf(IO_BUF, "half accum %k\n", half_pole_length_accum.a);
+    io_printf(IO_BUF, "d %f\n", (float)half_pole_length_accum.a);
     io_printf(IO_BUF, "anglep %f\n", pend_region[3]);
     io_printf(IO_BUF, "d %f\n", pend_region[3]);
-    io_printf(IO_BUF, "angle %f\n", pole_angle);
-    io_printf(IO_BUF, "d %f\n", pole_angle);
+    io_printf(IO_BUF, "angle accum %k\n", pole_angle_accum.a);
+    io_printf(IO_BUF, "f %f\n", (float)pole_angle_accum.a);
+    io_printf(IO_BUF, "angle %k\n", (accum)pole_angle);
+    io_printf(IO_BUF, "f %k\n", (float)pole_angle);
     io_printf(IO_BUF, "reward %u\n", pend_region[4]);
     io_printf(IO_BUF, "d %d\n", pend_region[4]);
     io_printf(IO_BUF, "force %u\n", pend_region[5]);
@@ -293,11 +319,14 @@ static bool initialize(uint32_t *timer_period)
     io_printf(IO_BUF, "d %d\n", pend_region[6]);
     io_printf(IO_BUF, "bins %u\n", pend_region[7]);
     io_printf(IO_BUF, "d %d\n", pend_region[7]);
-    io_printf(IO_BUF, "central %u\n", pend_region[7]);
-    io_printf(IO_BUF, "d %d\n", pend_region[7]);
+    io_printf(IO_BUF, "central %u\n", pend_region[8]);
+    io_printf(IO_BUF, "d %d\n", pend_region[8]);
     io_printf(IO_BUF, "re %d\n", reward_based);
 //    io_printf(IO_BUF, "r6 0x%x\n", *pend_region);
 //    io_printf(IO_BUF, "r6 0x%x\n", &pend_region);
+
+    io_printf(IO_BUF, "starting state (d,v,a):(%k, %k, %k) and cart (d,v,a):(%k, %k, %k)\n", (accum)pole_angle, (accum)pole_velocity,
+                        (accum)pole_acceleration, (accum)cart_position, (accum)pole_velocity, (accum)pole_acceleration);
 
     io_printf(IO_BUF, "Initialise: completed successfully\n");
 
@@ -336,8 +365,8 @@ bool update_state(float time_step){
     pole_velocity = (pole_acceleration * time_step) + pole_velocity;
     pole_angle = (pole_velocity * time_step) + pole_angle;
 
-    io_printf(IO_BUF, "pole (d,v,a):(%d, %d, %d) and cart (d,v,a):(%d, %d, %d)\n", pole_angle, pole_velocity,
-                        pole_acceleration, cart_position, pole_velocity, pole_acceleration);
+    io_printf(IO_BUF, "pole (d,v,a):(%k, %k, %k) and cart (d,v,a):(%k, %k, %k)\n", (accum)pole_angle, (accum)pole_velocity,
+                        (accum)pole_acceleration, (accum)cart_position, (accum)pole_velocity, (accum)pole_acceleration);
 
     if (abs(cart_position) > (track_length / 2.0f) || abs(pole_angle) > max_pole_angle) {
         return false;
@@ -378,26 +407,27 @@ void send_status(){
         if (central){
             relative_angle = abs(pole_angle) / max_pole_angle;
             relative_angular_velocity = abs(pole_velocity) / highend_pole_v;
-            relative_cart = abs(cart_position) / (track_length / 2);
+            relative_cart = abs(cart_position) / (track_length / 2.0f);
             relative_cart_velocity = abs(cart_velocity) / (highend_cart_v);
         }
         else{
             relative_angle = (pole_angle - min_pole_angle) / (max_pole_angle - min_pole_angle);
-            relative_angular_velocity = (pole_velocity + highend_pole_v) / (highend_pole_v * 2);
+            relative_angular_velocity = (pole_velocity + highend_pole_v) / (highend_pole_v * 2.f);
             relative_cart = cart_position / track_length;
-            relative_cart_velocity = (cart_velocity + highend_cart_v) / (highend_cart_v * 2);
+            relative_cart_velocity = (cart_velocity + highend_cart_v) / (highend_cart_v * 2.f);
         }
-        io_printf(IO_BUF, "relative angle, v %d, %d and cart, v %d, %d\n", relative_angle, relative_angular_velocity,
-                            relative_cart, relative_cart_velocity);
+//        io_printf(IO_BUF, "relative (angle, v) (%k, %k) and (cart, v) (%k, %k)\n", (accum)relative_angle, (accum)relative_angular_velocity,
+//                            (accum)relative_cart, (accum)relative_cart_velocity);
         float angle_roll = 0;
         float angle_roll_v = 0;
         float cart_roll = 0;
         float cart_roll_v = 0;
-        angle_roll = (float)(mars_kiss64_seed(kiss_seed) / 0xffffffff);
-        angle_roll_v = (float)(mars_kiss64_seed(kiss_seed) / 0xffffffff);
-        cart_roll = (float)(mars_kiss64_seed(kiss_seed) / 0xffffffff);
-        cart_roll_v = (float)(mars_kiss64_seed(kiss_seed) / 0xffffffff);
-        io_printf(IO_BUF, "roll angle, v %d, %d and cart, v %d, %d\n", angle_roll, angle_roll_v, cart_roll, cart_roll_v);
+        angle_roll = (float)(mars_kiss64_seed(kiss_seed) / (float)0xffffffff);
+        angle_roll_v = (float)(mars_kiss64_seed(kiss_seed) / (float)0xffffffff);
+        cart_roll = (float)(mars_kiss64_seed(kiss_seed) / (float)0xffffffff);
+        cart_roll_v = (float)(mars_kiss64_seed(kiss_seed) / (float)0xffffffff);
+//        io_printf(IO_BUF, "roll (angle, v) (%k, %k) and (cart, v) %k, %k\n", (accum)angle_roll, (accum)angle_roll_v,
+//                                                                        (accum)cart_roll, (accum)cart_roll_v);
         if (angle_roll > max_firing_prob){
             spike_angle();
         }
@@ -448,7 +478,7 @@ void timer_callback(uint unused, uint dummy)
     else
     {
         send_status();
-        if (tick_in_frame == 0){
+        if (_time == 0){
             update_state(0);
             // possibly use this to allow updating of time whenever
 //            auto start = chrono::steady_clock::now();

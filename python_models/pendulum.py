@@ -296,8 +296,9 @@ class Pendulum(ApplicationVertex,
         ip_tags = tags.get_ip_tags_for_vertex(self) or []
         spec.write_value(self._encoding, data_type=DataType.UINT32)
         spec.write_value(self._time_increment, data_type=DataType.UINT32)
-        new_length = numpy.uint32(self._pole_length*0xffff)
-        spec.write_value(numpy.uint32(self._pole_length * 0xffff), data_type=DataType.UINT32)
+        # new_length = numpy.uint32(self._pole_length)
+        # spec.write_value(numpy.uint32(self._pole_length), data_type=DataType.UINT32)
+        spec.write_value(self._pole_length, data_type=DataType.S1615)
         # new_angle = numpy.int(self._pole_angle * 0x7fffffff)
         # spec.write_value(numpy.uint32(new_angle), data_type=DataType.UINT32)
         spec.write_value(self._pole_angle, data_type=DataType.S1615)
