@@ -138,7 +138,7 @@ float mass_pole = 0.1; // kg
 float friction_cart_on_track = 0.0005; // coefficient of friction
 float friction_pole_hinge = 0.000002; // coefficient of friction
 
-int max_balance_time = 0;
+float max_balance_time = 0;
 
 float current_state[2];
 bool in_bounds = true;
@@ -439,8 +439,8 @@ void send_status(){
             relative_cart = cart_position / track_length;
             relative_cart_velocity = (cart_velocity + highend_cart_v) / (highend_cart_v * 2.f);
         }
-        io_printf(IO_BUF, "relative (angle, v) (%k, %k) and (cart, v) (%k, %k)\n", (accum)relative_angle,
-                            (accum)relative_angular_velocity, (accum)relative_cart, (accum)relative_cart_velocity);
+//        io_printf(IO_BUF, "relative (angle, v) (%k, %k) and (cart, v) (%k, %k)\n", (accum)relative_angle,
+//                            (accum)relative_angular_velocity, (accum)relative_cart, (accum)relative_cart_velocity);
         float angle_roll = 0;
         float angle_roll_v = 0;
         float cart_roll = 0;
@@ -449,16 +449,16 @@ void send_status(){
         angle_roll_v = (float)(mars_kiss64_seed(kiss_seed) / (float)0xffffffff);
         cart_roll = (float)(mars_kiss64_seed(kiss_seed) / (float)0xffffffff);
         cart_roll_v = (float)(mars_kiss64_seed(kiss_seed) / (float)0xffffffff);
-        io_printf(IO_BUF, "roll (angle, v) (%k, %k) and (cart, v) %k, %k wth max = %k\n", (accum)angle_roll,
-                                                                        (accum)angle_roll_v, (accum)cart_roll,
-                                                                        (accum)cart_roll_v, (accum)max_firing_prob);
+//        io_printf(IO_BUF, "roll (angle, v) (%k, %k) and (cart, v) %k, %k wth max = %k\n", (accum)angle_roll,
+//                                                                        (accum)angle_roll_v, (accum)cart_roll,
+//                                                                        (accum)cart_roll_v, (accum)max_firing_prob);
         angle_roll = angle_roll / relative_angle;
         angle_roll_v = angle_roll_v / relative_angular_velocity;
         cart_roll = cart_roll / relative_cart_velocity;
         cart_roll_v = cart_roll_v / relative_cart_velocity;
-        io_printf(IO_BUF, "relative roll (angle, v) (%k, %k) and (cart, v) %k, %k wth max = %k\n", (accum)angle_roll,
-                                                                        (accum)angle_roll_v, (accum)cart_roll,
-                                                                        (accum)cart_roll_v, (accum)max_firing_prob);
+//        io_printf(IO_BUF, "relative roll (angle, v) (%k, %k) and (cart, v) %k, %k wth max = %k\n", (accum)angle_roll,
+//                                                                        (accum)angle_roll_v, (accum)cart_roll,
+//                                                                        (accum)cart_roll_v, (accum)max_firing_prob);
         if (angle_roll < max_firing_prob){
             spike_angle();
         }
@@ -518,8 +518,8 @@ void timer_callback(uint unused, uint dummy)
         if(tick_in_frame == time_increment)
         {
             if (in_bounds){
-//                max_balance_time = (float)_time;
-                max_balance_time = max_balance_time + 1;
+                max_balance_time = (float)_time;
+//                max_balance_time = max_balance_time + 1;
                 in_bounds = update_state((float)time_increment / 1000.f);
             }
             number_of_updates = number_of_updates + 1;
@@ -528,11 +528,11 @@ void timer_callback(uint unused, uint dummy)
             tick_in_frame = 0;
 //            update_frame();
             // Update recorded score every 0.1s
-            if(score_change_count>=100){
+            if(score_change_count >= 100){
                 current_state[0] = cart_position;
                 current_state[1] = pole_angle;
                 if(reward_based == 0){
-                    recording_record(0, &current_state, 4);
+                    recording_record(0, &current_state, 8);
                 }
                 else{
                     recording_record(0, &max_balance_time, 4);

@@ -67,7 +67,7 @@ p.Projection(pendulum, null_pop, p.AllToAllConnector())
 
 arm_collection = []
 input_spikes = []
-rates = [10, 0]
+rates = [0, 0]
 # rates = [0, 10]
 print 'rates = ', rates
 for j in range(outputs):

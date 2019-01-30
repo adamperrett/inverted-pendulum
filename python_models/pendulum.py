@@ -388,7 +388,7 @@ class Pendulum(ApplicationVertex,
         data = data_values.read_all()
 
         numpy_format = list()
-        numpy_format.append(("Score", numpy.int32))
+        numpy_format.append(("Score", numpy.float32))
 
         output_data = numpy.array(data, dtype=numpy.uint8).view(numpy_format)
 
