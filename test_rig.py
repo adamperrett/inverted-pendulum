@@ -39,7 +39,7 @@ pole_angle = 2.6
 reward_based = 1
 force_increments = 100
 max_firing_rate = 50
-number_of_bins = 30
+number_of_bins = 3
 central = 1
 
 inputs = 2
@@ -67,8 +67,8 @@ p.Projection(pendulum, null_pop, p.AllToAllConnector())
 
 arm_collection = []
 input_spikes = []
-rates = [0, 0]
-# rates = [0, 10]
+# rates = [0, 0]
+rates = [0, 10]
 print 'rates = ', rates
 for j in range(outputs):
     arm_collection.append(p.Population(int(np.ceil(np.log2(outputs))),
