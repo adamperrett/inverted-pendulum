@@ -23,8 +23,7 @@
 #include "random.h"
 #include <math.h>
 #include <common/maths-util.h>
-//#include <chrono>
-//using namespace std::chrono;
+#include
 
 #include <recording.h>
 
@@ -149,12 +148,7 @@ uint32_t score_change_count=0;
 static inline void spike_angle(int bin)
 {
     uint32_t mask;
-    if (encoding_scheme != 0){
-        mask = (SPECIAL_EVENT_ANGLE * number_of_bins) + bin;
-    }
-    else{
-        mask = SPECIAL_EVENT_ANGLE;
-    }
+    mask = (SPECIAL_EVENT_ANGLE * number_of_bins) + bin;
     spin1_send_mc_packet(key | (mask), 0, NO_PAYLOAD);
     //  io_printf(IO_BUF, "Got a reward\n");
 }
@@ -162,12 +156,7 @@ static inline void spike_angle(int bin)
 static inline void spike_angle_v(int bin)
 {
     uint32_t mask;
-    if (encoding_scheme != 0){
-        mask = (SPECIAL_EVENT_ANGLE_V * number_of_bins) + bin;
-    }
-    else{
-        mask = SPECIAL_EVENT_ANGLE_V;
-    }
+    mask = (SPECIAL_EVENT_ANGLE_V * number_of_bins) + bin;
     spin1_send_mc_packet(key | (mask), 0, NO_PAYLOAD);
     //  io_printf(IO_BUF, "Got a reward\n");
 }
@@ -175,12 +164,7 @@ static inline void spike_angle_v(int bin)
 static inline void spike_cart(int bin)
 {
     uint32_t mask;
-    if (encoding_scheme != 0){
-        mask = (SPECIAL_EVENT_CART * number_of_bins) + bin;
-    }
-    else{
-        mask = SPECIAL_EVENT_CART;
-    }
+    mask = (SPECIAL_EVENT_CART * number_of_bins) + bin;
     spin1_send_mc_packet(key | (mask), 0, NO_PAYLOAD);
     //  io_printf(IO_BUF, "Got a reward\n");
 }
@@ -188,12 +172,7 @@ static inline void spike_cart(int bin)
 static inline void spike_cart_v(int bin)
 {
     uint32_t mask;
-    if (encoding_scheme != 0){
-        mask = (SPECIAL_EVENT_CART_V * number_of_bins) + bin;
-    }
-    else{
-        mask = SPECIAL_EVENT_CART_V;
-    }
+    mask = (SPECIAL_EVENT_CART_V * number_of_bins) + bin;
     spin1_send_mc_packet(key | (mask), 0, NO_PAYLOAD);
     //  io_printf(IO_BUF, "Got a reward\n");
 }
@@ -430,30 +409,35 @@ float rand021(){
     return (float)(mars_kiss64_seed(kiss_seed) / (float)0xffffffff);
 }
 
-float norm_dist(float m, float s)	/* uses the box_muller function*/
+float norm_dist(float mean, float stdev)	/* uses the box_muller function*/
 {				        /* mean m, standard deviation s */
-	float x1, x2, w, y1;
-	static float y2;
-	static int use_last = 0;
-	if (use_last)		        /* use value from previous call */
-	{
-		y1 = y2;
-		use_last = 0;
-	}
-	else
-	{
-		do {
-			x1 = 2.0 * rand021() - 1.0;
-			x2 = 2.0 * rand021() - 1.0;
-			w = x1 * x1 + x2 * x2;
-		} while ( w >= 1.0 );
-		w = sqrt( (-2.0 * log( w ) ) / w );
-		y1 = x1 * w;
-		y2 = x2 * w;
-		use_last = 1;
-	}
-	return( m + y1 * s );
+    uint_float_union norm_dist;
+    norm_dist.a = gaussian_dist_variate((uniform_rng)0xffff, kiss_seed[0]);
+    norm_dist.f = (norm_dist.f - (float)0x7fff + mean) * stdev;
+    return norm_dist.f;
 }
+//	float x1, x2, w, y1;
+//	static float y2;
+//	static int use_last = 0;
+//	if (use_last)		        /* use value from previous call */
+//	{
+//		y1 = y2;
+//		use_last = 0;
+//	}
+//	else
+//	{
+//		do {
+//			x1 = 2.0 * rand021() - 1.0;
+//			x2 = 2.0 * rand021() - 1.0;
+//			w = x1 * x1 + x2 * x2;
+//		} while ( w >= 1.0 );
+//		w = sqrt( (-2.0 * log( w ) ) / w );
+//		y1 = x1 * w;
+//		y2 = x2 * w;
+//		use_last = 1;
+//	}
+//	return( m + y1 * s );
+//}
 
 bool firing_prob(float relative_value, int bin){
     float norm_value = norm_dist(bin_width*(float)bin, bin_width/3.f);
@@ -461,7 +445,7 @@ bool firing_prob(float relative_value, int bin){
     if (separation < 0){
         separation = -separation;
     }
-//    io_printf(IO_BUF, "norm = %k, separation = %k, bin = %d\n", (accum)norm_value, (accum)separation, bin);
+    io_printf(IO_BUF, "norm = %k, separation = %k, bin = %d\n", (accum)norm_value, (accum)separation, bin);
     if (norm_value < 0){
         norm_value = -norm_value;
     }
@@ -474,110 +458,27 @@ bool firing_prob(float relative_value, int bin){
 }
 
 void send_status(){
-    if (encoding_scheme == 0){
-        float relative_cart = 0;
-        float relative_angle = 0;
-        float relative_cart_velocity = 0;
-        float relative_angular_velocity = 0;
-        if (central){
-            if (pole_angle > 0){
-                relative_angle = pole_angle / max_pole_angle;
-            }
-            else{
-                relative_angle = -pole_angle / max_pole_angle;
-            }
-            if (pole_velocity > 0){
-                relative_angular_velocity = pole_velocity / highend_pole_v;
-            }
-            else{
-                relative_angular_velocity = -pole_velocity / highend_pole_v;
-            }
-            if (cart_position - (track_length / 2.0f) > 0){
-                relative_cart = (cart_position - (track_length / 2.0f)) / (track_length / 2.0f);
-            }
-            else{
-                relative_cart = -(cart_position - (track_length / 2.0f)) / (track_length / 2.0f);
-            }
-            if (cart_velocity > 0){
-                relative_cart_velocity = cart_velocity / (highend_cart_v);
-            }
-            else{
-                relative_cart_velocity = -cart_velocity / (highend_cart_v);
-            }
+    float relative_cart;
+    float relative_angle;
+    float relative_cart_velocity;
+    float relative_angular_velocity;
+    relative_angle = pole_angle / max_pole_angle;
+    relative_angular_velocity = pole_velocity / highend_pole_v;
+    relative_cart = (cart_position - (track_length / 2.0f)) / (track_length / 2.0f);
+    relative_cart_velocity = cart_velocity / (highend_cart_v);
+    for (int i = 0; i < number_of_bins; i = i + 1){
+        if (firing_prob(relative_angle, i)){
+            spike_angle(i);
         }
-        else{
-            relative_angle = (pole_angle - min_pole_angle) / (max_pole_angle - min_pole_angle);
-            relative_angular_velocity = (pole_velocity + highend_pole_v) / (highend_pole_v * 2.f);
-            relative_cart = cart_position / track_length;
-            relative_cart_velocity = (cart_velocity + highend_cart_v) / (highend_cart_v * 2.f);
+        if (firing_prob(relative_angular_velocity, i)){
+            spike_angle_v(i);
         }
-//        io_printf(IO_BUF, "relative (angle, v) (%k, %k) and (cart, v) (%k, %k)\n", (accum)relative_angle,
-//                            (accum)relative_angular_velocity, (accum)relative_cart, (accum)relative_cart_velocity);
-        float angle_roll = 0;
-        float angle_roll_v = 0;
-        float cart_roll = 0;
-        float cart_roll_v = 0;
-        angle_roll = rand021();
-        angle_roll_v = rand021();
-        cart_roll = rand021();
-        cart_roll_v = rand021();
-//        io_printf(IO_BUF, "roll (angle, v) (%k, %k) and (cart, v) %k, %k wth max = %k\n", (accum)angle_roll,
-//                                                                        (accum)angle_roll_v, (accum)cart_roll,
-//                                                                        (accum)cart_roll_v, (accum)max_firing_prob);
-        angle_roll = angle_roll / relative_angle;
-        angle_roll_v = angle_roll_v / relative_angular_velocity;
-        cart_roll = cart_roll / relative_cart_velocity;
-        cart_roll_v = cart_roll_v / relative_cart_velocity;
-//        io_printf(IO_BUF, "relative roll (angle, v) (%k, %k) and (cart, v) %k, %k wth max = %k\n", (accum)angle_roll,
-//                                                                        (accum)angle_roll_v, (accum)cart_roll,
-//                                                                        (accum)cart_roll_v, (accum)max_firing_prob);
-        if (angle_roll < max_firing_prob){
-            spike_angle(0);
+        if (firing_prob(relative_cart, i)){
+            spike_cart(i);
         }
-        if (angle_roll_v < max_firing_prob){
-            spike_angle_v(0);
+        if (firing_prob(relative_cart_velocity, i)){
+            spike_cart_v(i);
         }
-        if (cart_roll < max_firing_prob){
-            spike_cart(0);
-        }
-        if (cart_roll_v < max_firing_prob){
-            spike_cart_v(0);
-        }
-    }
-    if (encoding_scheme == 1){
-        float relative_cart;
-        float relative_angle;
-        float relative_cart_velocity;
-        float relative_angular_velocity;
-        relative_angle = pole_angle / max_pole_angle;
-        relative_angular_velocity = pole_velocity / highend_pole_v;
-        relative_cart = (cart_position - (track_length / 2.0f)) / (track_length / 2.0f);
-        relative_cart_velocity = cart_velocity / (highend_cart_v);
-        for (int i = 0; i < number_of_bins; i = i + 1){
-            if (firing_prob(relative_angle, i)){
-                if (rand021() < max_firing_prob){
-                    spike_angle(i);
-                }
-            }
-            if (firing_prob(relative_angular_velocity, i)){
-                if (rand021() < max_firing_prob){
-                    spike_angle_v(i);
-                }
-            }
-            if (firing_prob(relative_cart, i)){
-                if (rand021() < max_firing_prob){
-                    spike_cart(i);
-                }
-            }
-            if (firing_prob(relative_cart_velocity, i)){
-                if (rand021() < max_firing_prob){
-                    spike_cart_v(i);
-                }
-            }
-        }
-    }
-    else{
-//        io_printf(IO_BUF, "some stuff with bins here\n");
     }
 }
 
