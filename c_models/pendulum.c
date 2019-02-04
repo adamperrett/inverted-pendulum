@@ -15,7 +15,6 @@
 #include <simulation.h>
 #include "random.h"
 #include <stdfix.h>
-//#include "normal.h"
 #include <math.h>
 #include <common/maths-util.h>
 
@@ -147,7 +146,7 @@ static inline void spike_angle(int bin)
     uint32_t mask;
     mask = (SPECIAL_EVENT_ANGLE * number_of_bins) + bin;
     spin1_send_mc_packet(key | (mask), 0, NO_PAYLOAD);
-    io_printf(IO_BUF, "spike_angle \t%d - \t%u\n", bin, mask);
+//    io_printf(IO_BUF, "spike_angle \t%d - \t%u\n", bin, mask);
 }
 
 static inline void spike_angle_v(int bin)
@@ -155,7 +154,7 @@ static inline void spike_angle_v(int bin)
     uint32_t mask;
     mask = (SPECIAL_EVENT_ANGLE_V * number_of_bins) + bin;
     spin1_send_mc_packet(key | (mask), 0, NO_PAYLOAD);
-    io_printf(IO_BUF, "spike_angle_v \t%d - \t%u\n", bin, mask);
+//    io_printf(IO_BUF, "spike_angle_v \t%d - \t%u\n", bin, mask);
 }
 
 static inline void spike_cart(int bin)
@@ -163,7 +162,7 @@ static inline void spike_cart(int bin)
     uint32_t mask;
     mask = (SPECIAL_EVENT_CART * number_of_bins) + bin;
     spin1_send_mc_packet(key | (mask), 0, NO_PAYLOAD);
-    io_printf(IO_BUF, "spike_cart \t%d - \t%u\n", bin, mask);
+//    io_printf(IO_BUF, "spike_cart \t%d - \t%u\n", bin, mask);
 }
 
 static inline void spike_cart_v(int bin)
@@ -171,7 +170,7 @@ static inline void spike_cart_v(int bin)
     uint32_t mask;
     mask = (SPECIAL_EVENT_CART_V * number_of_bins) + bin;
     spin1_send_mc_packet(key | (mask), 0, NO_PAYLOAD);
-    io_printf(IO_BUF, "spike_cart_v \t%d - \t%u\n", bin, mask);
+//    io_printf(IO_BUF, "spike_cart_v \t%d - \t%u\n", bin, mask);
 }
 
 void resume_callback() {
@@ -371,8 +370,8 @@ bool update_state(float time_step){
 
 //    io_printf(IO_BUF, "motor force = %k\n", (accum)motor_force);
 //    io_printf(IO_BUF, "max_pole_angle = %k, abs = %k\n", (accum)max_pole_angle, (accum)(abs(pole_angle)));
-    io_printf(IO_BUF, "pole (d,v,a):(%k, %k, %k) and cart (d,v,a):(%k, %k, %k)\n", (accum)pole_angle, (accum)pole_velocity,
-                        (accum)pole_acceleration, (accum)cart_position, (accum)cart_velocity, (accum)cart_acceleration);
+//    io_printf(IO_BUF, "pole (d,v,a):(%k, %k, %k) and cart (d,v,a):(%k, %k, %k)\n", (accum)pole_angle, (accum)pole_velocity,
+//                        (accum)pole_acceleration, (accum)cart_position, (accum)cart_velocity, (accum)cart_acceleration);
 
     motor_force = 0;
 
@@ -444,7 +443,7 @@ bool firing_prob(float relative_value, int bin){
     if (separation < 0){
         separation = -separation;
     }
-    io_printf(IO_BUF, "norm = %k, separation = %k, realtive = %k, bin = %d\n", (accum)norm_value, (accum)separation, (accum)relative_value, bin);
+//    io_printf(IO_BUF, "norm = %k, separation = %k, realtive = %k, bin = %d\n", (accum)norm_value, (accum)separation, (accum)relative_value, bin);
     if (norm_value < 0){
         norm_value = -norm_value;
     }
