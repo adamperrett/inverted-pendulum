@@ -1,5 +1,7 @@
 import spynnaker8 as p
 import numpy as np
+from pyNN.utility.plotting import Figure, Panel
+import matplotlib.pyplot as plt
 from python_models.pendulum import Pendulum
 from spinn_arm.python_models.arm import Arm
 from spinn_front_end_common.utilities.globals_variables import get_simulator
@@ -32,7 +34,7 @@ def connect_to_arms(pre_pop, from_list, arms, r_type, plastic, stdp_model):
 
 runtime = 21000
 exposure_time = 200
-encoding = 0
+encoding = 1
 time_increment = 20
 pole_length = 1
 pole_angle = 2.6
@@ -58,17 +60,21 @@ input_model = Pendulum(encoding=encoding,
                        number_of_bins=number_of_bins,
                        central=central,
                        rand_seed=[np.random.randint(0xffff) for i in range(4)],
+                       bin_overlap=2,
                        label='pendulum_pop')
 
 pendulum_pop_size = input_model.neurons()
 pendulum = p.Population(pendulum_pop_size, input_model)
-null_pop = p.Population(1, p.IF_cond_exp(), label='null')
-p.Projection(pendulum, null_pop, p.AllToAllConnector())
+null_pop = p.Population(4*number_of_bins, p.IF_cond_exp(), label='null')
+p.Projection(pendulum, null_pop, p.OneToOneConnector(), p.StaticSynapse(weight=0.09))
+null_pop.record(['spikes', 'v'])
+# null_pop.record(['spikes', 'v'])
 
 arm_collection = []
 input_spikes = []
-# rates = [0, 0]
-rates = [0, 10]
+rates = [0, 0]
+# rates = [0, 20]
+# rates = [0, 10]
 print 'rates = ', rates
 for j in range(outputs):
     arm_collection.append(p.Population(int(np.ceil(np.log2(outputs))),
@@ -87,6 +93,15 @@ p.run(runtime)
 scores = []
 scores.append(get_scores(game_pop=pendulum, simulator=simulator))
 print scores
+
+spikes = null_pop.get_data('spikes').segments[0].spiketrains
+v = null_pop.get_data('v').segments[0].filter(name='v')[0]
+plt.figure("spikes out")
+Figure(
+    Panel(spikes, xlabel="Time (ms)", ylabel="nID", xticks=True),
+    Panel(v, ylabel="Membrane potential (mV)", yticks=True)
+)
+plt.show()
 
 print 'rates = ', rates
 p.end()

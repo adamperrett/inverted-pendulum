@@ -98,7 +98,7 @@ class Pendulum(ApplicationVertex,
 
     @overrides(AbstractProvidesNKeysForPartition.get_n_keys_for_partition)
     def get_n_keys_for_partition(self, partition, graph_mapper):
-        return 8  # 2  # two for control IDs
+        return self._n_neurons  # 2  # two for control IDs
 
     @overrides(AbstractAcceptsIncomingSynapses.get_synapse_id_by_target)
     def get_synapse_id_by_target(self, target):
@@ -121,6 +121,7 @@ class Pendulum(ApplicationVertex,
         'number_of_bins': 20,
         'central': 1,
         'rand_seed': [0, 1, 2, 3],
+        'bin_overlap': 2,
         'label': "pole",
         'incoming_spike_buffer_size': None,
         'duration': MAX_SIM_DURATION}
@@ -138,6 +139,7 @@ class Pendulum(ApplicationVertex,
                  number_of_bins=default_parameters['number_of_bins'],
                  central=default_parameters['central'],
                  rand_seed=default_parameters['rand_seed'],
+                 bin_overlap=default_parameters['bin_overlap'],
                  label=default_parameters['label'],
                  incoming_spike_buffer_size=default_parameters['incoming_spike_buffer_size'],
                  simulation_duration_ms=default_parameters['duration']):
@@ -158,7 +160,7 @@ class Pendulum(ApplicationVertex,
         if self._encoding == 0:
             self._n_neurons = 4
         else:
-            print "number of keys reserved needs to be increased"
+            self._n_neurons = 4 * number_of_bins
 
         self._time_increment = time_increment
         self._reward_based = reward_based
@@ -167,6 +169,7 @@ class Pendulum(ApplicationVertex,
         self._number_of_bins = number_of_bins
         self._central = central
         self._rand_seed = rand_seed
+        self._bin_overlap = bin_overlap
 
         # used to define size of recording region
         self._recording_size = int((simulation_duration_ms / 1000.) * 4)
@@ -311,6 +314,7 @@ class Pendulum(ApplicationVertex,
         spec.write_value(self._rand_seed[1], data_type=DataType.UINT32)
         spec.write_value(self._rand_seed[2], data_type=DataType.UINT32)
         spec.write_value(self._rand_seed[3], data_type=DataType.UINT32)
+        spec.write_value(self._bin_overlap, data_type=DataType.S1615)
 
         # End-of-Spec:
         spec.end_specification()

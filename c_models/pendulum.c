@@ -1,10 +1,3 @@
-//
-//  bkout.c
-//  BreakOut
-//
-//  Created by Steve Furber on 26/08/2016.
-//  Copyright © 2016 Steve Furber. All rights reserved.
-//
 // Standard includes
 #include <stdbool.h>
 #include <stdint.h>
@@ -21,9 +14,10 @@
 #include <data_specification.h>
 #include <simulation.h>
 #include "random.h"
+#include <stdfix.h>
+//#include "normal.h"
 #include <math.h>
 #include <common/maths-util.h>
-#include
 
 #include <recording.h>
 
@@ -76,6 +70,7 @@ typedef enum // forward will be considered positive motion
 
 typedef union{
    uint32_t u;
+//   uint32_t* us;
    float f;
    accum a;
 } uint_float_union;
@@ -118,6 +113,8 @@ float max_firing_prob = 0;
 int encoding_scheme = 0; // 0: rate, 1: time, 2: rank (replace with type def
 int number_of_bins = 20;
 float bin_width;
+float bin_overlap = 2.5;
+uint_float_union bin_overlap_accum;
 
 int central = 1; // if it's central that mean perfectly central on the track and angle is the lowest rate, else half
 
@@ -150,7 +147,7 @@ static inline void spike_angle(int bin)
     uint32_t mask;
     mask = (SPECIAL_EVENT_ANGLE * number_of_bins) + bin;
     spin1_send_mc_packet(key | (mask), 0, NO_PAYLOAD);
-    //  io_printf(IO_BUF, "Got a reward\n");
+    io_printf(IO_BUF, "spike_angle \t%d - \t%u\n", bin, mask);
 }
 
 static inline void spike_angle_v(int bin)
@@ -158,7 +155,7 @@ static inline void spike_angle_v(int bin)
     uint32_t mask;
     mask = (SPECIAL_EVENT_ANGLE_V * number_of_bins) + bin;
     spin1_send_mc_packet(key | (mask), 0, NO_PAYLOAD);
-    //  io_printf(IO_BUF, "Got a reward\n");
+    io_printf(IO_BUF, "spike_angle_v \t%d - \t%u\n", bin, mask);
 }
 
 static inline void spike_cart(int bin)
@@ -166,7 +163,7 @@ static inline void spike_cart(int bin)
     uint32_t mask;
     mask = (SPECIAL_EVENT_CART * number_of_bins) + bin;
     spin1_send_mc_packet(key | (mask), 0, NO_PAYLOAD);
-    //  io_printf(IO_BUF, "Got a reward\n");
+    io_printf(IO_BUF, "spike_cart \t%d - \t%u\n", bin, mask);
 }
 
 static inline void spike_cart_v(int bin)
@@ -174,7 +171,7 @@ static inline void spike_cart_v(int bin)
     uint32_t mask;
     mask = (SPECIAL_EVENT_CART_V * number_of_bins) + bin;
     spin1_send_mc_packet(key | (mask), 0, NO_PAYLOAD);
-    //  io_printf(IO_BUF, "Got a reward\n");
+    io_printf(IO_BUF, "spike_cart_v \t%d - \t%u\n", bin, mask);
 }
 
 void resume_callback() {
@@ -257,7 +254,7 @@ static bool initialize(uint32_t *timer_period)
 //    io_printf(IO_BUF, "angle d %k\n", (accum)pole_angle);
 //    io_printf(IO_BUF, "pi %k\n", (accum)M_PI);
 //    io_printf(IO_BUF, "180 %k\n", (accum)(pole_angle / 180.0f));
-    pole_angle = (pole_angle / 180.0f) * M_PI;
+    pole_angle = (pole_angle / 180.0f) * (float)M_PI;
 //    io_printf(IO_BUF, "angle r %k\n", (accum)pole_angle);
 //    pole_angle = (float)(pole_angle_accum.a);
 //    accum temp_angle = pend_region[3];
@@ -283,6 +280,9 @@ static bool initialize(uint32_t *timer_period)
     kiss_seed[2] = pend_region[11];
     kiss_seed[3] = pend_region[12];
     validate_mars_kiss64_seed(kiss_seed);
+
+    bin_overlap_accum.u = pend_region[13];
+    bin_overlap = bin_overlap_accum.a;
 
     force_increment = (float)((max_motor_force - min_motor_force) / (float)force_increment);
 
@@ -339,7 +339,7 @@ bool update_state(float time_step){
     float mass_pole = 0.1; // kg
     float friction_cart_on_track = 0.0005; // coefficient of friction
     float friction_pole_hinge = 0.000002; // coefficient of friction
-    
+
     float effective_force_pole_on_cart = 0;
     float pole_angle_force = (mass_pole * half_pole_length * pole_velocity * pole_velocity * sin(pole_angle));
     float angle_scalar = ((3.0f / 4.0f) * mass_pole * cos(pole_angle));
@@ -409,12 +409,11 @@ float rand021(){
     return (float)(mars_kiss64_seed(kiss_seed) / (float)0xffffffff);
 }
 
-float norm_dist(float mean, float stdev)	/* uses the box_muller function*/
-{				        /* mean m, standard deviation s */
-    uint_float_union norm_dist;
-    norm_dist.a = gaussian_dist_variate((uniform_rng)0xffff, kiss_seed[0]);
-    norm_dist.f = (norm_dist.f - (float)0x7fff + mean) * stdev;
-    return norm_dist.f;
+float norm_dist(float mean, float stdev){
+    accum norm_dist;
+    norm_dist = gaussian_dist_variate(mars_kiss64_simp, NULL);
+    norm_dist = (norm_dist * stdev) + mean;
+    return (float)norm_dist;
 }
 //	float x1, x2, w, y1;
 //	static float y2;
@@ -440,17 +439,22 @@ float norm_dist(float mean, float stdev)	/* uses the box_muller function*/
 //}
 
 bool firing_prob(float relative_value, int bin){
-    float norm_value = norm_dist(bin_width*(float)bin, bin_width/3.f);
+    float norm_value = norm_dist(0, bin_width / bin_overlap);
     float separation = relative_value - (bin_width * (float)bin);
     if (separation < 0){
         separation = -separation;
     }
-    io_printf(IO_BUF, "norm = %k, separation = %k, bin = %d\n", (accum)norm_value, (accum)separation, bin);
+    io_printf(IO_BUF, "norm = %k, separation = %k, realtive = %k, bin = %d\n", (accum)norm_value, (accum)separation, (accum)relative_value, bin);
     if (norm_value < 0){
         norm_value = -norm_value;
     }
-    if (norm_value < separation){
-        return true;
+    if (norm_value > separation){
+        if (rand021() < max_firing_prob){
+            return true;
+        }
+        else{
+            return false;
+        }
     }
     else{
         return false;
@@ -462,10 +466,14 @@ void send_status(){
     float relative_angle;
     float relative_cart_velocity;
     float relative_angular_velocity;
-    relative_angle = pole_angle / max_pole_angle;
-    relative_angular_velocity = pole_velocity / highend_pole_v;
+    relative_angle = (pole_angle + max_pole_angle) / (2 * max_pole_angle);
+//    io_printf(IO_BUF, "rela = %k, ang = %k, max = %k\n", (accum)relative_angle, (accum)pole_angle, (accum)max_pole_angle);
+    relative_angular_velocity = (pole_velocity + highend_pole_v) / (2 * highend_pole_v);
+//    io_printf(IO_BUF, "rela = %k, angv = %k, maxv = %k\n", (accum)relative_angular_velocity, (accum)pole_velocity, (accum)highend_pole_v);
     relative_cart = (cart_position - (track_length / 2.0f)) / (track_length / 2.0f);
-    relative_cart_velocity = cart_velocity / (highend_cart_v);
+//    io_printf(IO_BUF, "rela = %k, cart = %k, max = %k\n", (accum)relative_cart, (accum)cart_position, (accum)track_length);
+    relative_cart_velocity = (cart_velocity + highend_cart_v) / (2 * highend_cart_v);
+//    io_printf(IO_BUF, "rela = %k, cartv = %k, maxv = %k\n", (accum)relative_cart_velocity, (accum)cart_velocity, (accum)highend_cart_v);
     for (int i = 0; i < number_of_bins; i = i + 1){
         if (firing_prob(relative_angle, i)){
             spike_angle(i);
