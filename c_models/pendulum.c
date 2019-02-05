@@ -373,7 +373,7 @@ bool update_state(float time_step){
 //    io_printf(IO_BUF, "pole (d,v,a):(%k, %k, %k) and cart (d,v,a):(%k, %k, %k)\n", (accum)pole_angle, (accum)pole_velocity,
 //                        (accum)pole_acceleration, (accum)cart_position, (accum)cart_velocity, (accum)cart_acceleration);
 
-    motor_force = 0;
+//    motor_force = mot;
 
     if (cart_position > track_length || cart_position < 0  || pole_angle > max_pole_angle  || pole_angle < min_pole_angle) {
         io_printf(IO_BUF, "failed out\n");
