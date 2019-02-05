@@ -38,11 +38,12 @@ encoding = 1
 time_increment = 20
 pole_length = 1
 pole_angle = 2.6
-reward_based = 1
-force_increments = 100
-max_firing_rate = 50
+reward_based = 0
+force_increments = 5
+max_firing_rate = 1000
 number_of_bins = 3
 central = 1
+bin_overlap = 3
 
 inputs = 2
 outputs = 2
@@ -60,15 +61,20 @@ input_model = Pendulum(encoding=encoding,
                        number_of_bins=number_of_bins,
                        central=central,
                        rand_seed=[np.random.randint(0xffff) for i in range(4)],
-                       bin_overlap=2,
+                       bin_overlap=3,
                        label='pendulum_pop')
 
 pendulum_pop_size = input_model.neurons()
 pendulum = p.Population(pendulum_pop_size, input_model)
-null_pop = p.Population(4*number_of_bins, p.IF_cond_exp(), label='null')
-p.Projection(pendulum, null_pop, p.OneToOneConnector(), p.StaticSynapse(weight=0.09))
-null_pop.record(['spikes', 'v'])
+# null_pop = p.Population(4*number_of_bins, p.IF_cond_exp(), label='null')
+# p.Projection(pendulum, null_pop, p.OneToOneConnector(), p.StaticSynapse(weight=0.09))
 # null_pop.record(['spikes', 'v'])
+# null_pop.record(['spikes', 'v'])
+null_pops = []
+for i in range(4*number_of_bins):
+    null_pops.append(p.Population(1, p.IF_cond_exp(), label='null {}'.format(i)))
+    null_pops[i].record(['spikes', 'v'])
+    p.Projection(pendulum, null_pops[i], p.FromListConnector([[i, 0, 0.1, 1]]))
 
 arm_collection = []
 input_spikes = []
@@ -76,6 +82,11 @@ rates = [0, 0]
 # rates = [0, 20]
 # rates = [0, 10]
 print 'rates = ', rates
+from_list_conn_left = [[0, 0, 0.1, 1], [6, 0, 0.1, 1], [3, 0, 0.1, 1], [11, 0, 0.1, 1]]
+from_list_conn_right = [[2, 0, 0.1, 1], [8, 0, 0.1, 1], [5, 0, 0.1, 1], [9, 0, 0.1, 1]]
+# from_list_conn_right = [[2, 0, 0.1, 1], [5, 0, 0.1, 1], [8, 0, 0.1, 1], [9, 0, 0.1, 1]]
+# from_list_conn_left = [[0, 0, 0.1, 1], [3, 0, 0.1, 1], [6, 0, 0.1, 1], [11, 0, 0.1, 1]]
+arm_conns = [from_list_conn_left, from_list_conn_right]
 for j in range(outputs):
     arm_collection.append(p.Population(int(np.ceil(np.log2(outputs))),
                                        Arm(arm_id=j, reward_delay=exposure_time,
@@ -84,28 +95,59 @@ for j in range(outputs):
                                            label='arm_pop{}'.format(j)))
     p.Projection(arm_collection[j], pendulum, p.AllToAllConnector(), p.StaticSynapse())
     # p.Projection(null_pop, arm_collection[j], p.AllToAllConnector())
-    input_spikes.append(p.Population(1, p.SpikeSourcePoisson(rate=rates[j])))
+    # input_spikes.append(p.Population(1, p.SpikeSourcePoisson(rate=rates[j])))
     # p.Projection(input_spikes[j], arm_collection[j], p.AllToAllConnector(), p.StaticSynapse())
-    p.Projection(pendulum, arm_collection[j], p.FromListConnector(arm_conns[j]))
+    # p.Projection(null_pop, arm_collection[j], p.FromListConnector(arm_conns[j]))
+for conn in from_list_conn_left:
+    p.Projection(null_pops[conn[0]], arm_collection[0], p.AllToAllConnector())
+for conn in from_list_conn_right:
+    p.Projection(null_pops[conn[0]], arm_collection[1], p.AllToAllConnector())
 
-from_list_conn_left = [[0, 0, 0.1, 1], [3, 0, 0.1, 1], [6, 0, 0.1, 1], [9, 0, 0.1, 1]]
-from_list_conn_right = [[2, 0, 0.1, 1], [5, 0, 0.1, 1], [8, 0, 0.1, 1], [11, 0, 0.1, 1]]
 
 simulator = get_simulator()
 p.run(runtime)
 
 scores = []
 scores.append(get_scores(game_pop=pendulum, simulator=simulator))
-print scores
+if reward_based:
+    print scores
+else:
+    i = 0
+    print "cart  |  angle"
+    while i < len(scores[0]):
+        print "{:8}\t{:8}".format(scores[0][i], scores[0][i+1])
+        i += 2
 
-spikes = null_pop.get_data('spikes').segments[0].spiketrains
-v = null_pop.get_data('v').segments[0].filter(name='v')[0]
+spikes = []
+v = []
+for i in range(4*number_of_bins):
+    spikes.append(null_pops[i].get_data('spikes').segments[0].spiketrains)
+    v.append(null_pops[i].get_data('v').segments[0].filter(name='v')[0])
 plt.figure("spikes out")
 Figure(
-    Panel(spikes, xlabel="Time (ms)", ylabel="nID", xticks=True),
-    Panel(v, ylabel="Membrane potential (mV)", yticks=True)
+        Panel(spikes[0], xlabel="Time (ms)", ylabel="nID", xticks=True),
+        Panel(spikes[1], xlabel="Time (ms)", ylabel="nID", xticks=True),
+        Panel(spikes[2], xlabel="Time (ms)", ylabel="nID", xticks=True),
+        Panel(spikes[3], xlabel="Time (ms)", ylabel="nID", xticks=True),
+        Panel(spikes[4], xlabel="Time (ms)", ylabel="nID", xticks=True),
+        Panel(spikes[5], xlabel="Time (ms)", ylabel="nID", xticks=True),
+        Panel(spikes[6], xlabel="Time (ms)", ylabel="nID", xticks=True),
+        Panel(spikes[7], xlabel="Time (ms)", ylabel="nID", xticks=True),
+        Panel(spikes[8], xlabel="Time (ms)", ylabel="nID", xticks=True),
+        Panel(spikes[9], xlabel="Time (ms)", ylabel="nID", xticks=True),
+        Panel(spikes[10], xlabel="Time (ms)", ylabel="nID", xticks=True),
+        Panel(spikes[11], xlabel="Time (ms)", ylabel="nID", xticks=True)
 )
 plt.show()
+
+# spikes = null_pop.get_data('spikes').segments[0].spiketrains
+# v = null_pop.get_data('v').segments[0].filter(name='v')[0]
+# plt.figure("spikes out")
+# Figure(
+#     Panel(spikes, xlabel="Time (ms)", ylabel="nID", xticks=True),
+#     Panel(v, ylabel="Membrane potential (mV)", yticks=True)
+# )
+# plt.show()
 
 print 'rates = ', rates
 p.end()

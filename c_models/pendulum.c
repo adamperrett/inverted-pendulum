@@ -98,9 +98,11 @@ float track_length = 4.8; // m
 float cart_position = 0; // m
 float cart_velocity = 0;  // m/s
 float cart_acceleration = 0;  // m/s^2
-float highend_cart_v = 3; // used to calculate firing rate and bins
+float highend_cart_v = 5; // used to calculate firing rate and bins
 float max_pole_angle = (36.0f / 180.f) * M_PI;
 float min_pole_angle = -(36.0f / 180.f) * M_PI;
+float max_pole_angle_bin = (26.0f / 180.f) * M_PI;
+float min_pole_angle_bin = -(26.0f / 180.f) * M_PI;
 uint_float_union pole_angle_accum;
 float pole_angle;
 float pole_velocity = 0; // angular/s
@@ -151,7 +153,7 @@ static inline void spike_angle(int bin)
         mask = SPECIAL_EVENT_ANGLE;
     }
     spin1_send_mc_packet(key | (mask), 0, NO_PAYLOAD);
-    //  io_printf(IO_BUF, "Got a reward\n");
+    io_printf(IO_BUF, "spike_angle \t%d - \t%u\n", bin, mask);
 }
 
 static inline void spike_angle_v(int bin)
@@ -164,7 +166,7 @@ static inline void spike_angle_v(int bin)
         mask = SPECIAL_EVENT_ANGLE_V;
     }
     spin1_send_mc_packet(key | (mask), 0, NO_PAYLOAD);
-    //  io_printf(IO_BUF, "Got a reward\n");
+    io_printf(IO_BUF, "spike_angle_v \t%d - \t%u\n", bin, mask);
 }
 
 static inline void spike_cart(int bin)
@@ -177,7 +179,7 @@ static inline void spike_cart(int bin)
         mask = SPECIAL_EVENT_CART;
     }
     spin1_send_mc_packet(key | (mask), 0, NO_PAYLOAD);
-    //  io_printf(IO_BUF, "Got a reward\n");
+    io_printf(IO_BUF, "spike_cart \t%d - \t%u\n", bin, mask);
 }
 
 static inline void spike_cart_v(int bin)
@@ -190,7 +192,7 @@ static inline void spike_cart_v(int bin)
         mask = SPECIAL_EVENT_CART_V;
     }
     spin1_send_mc_packet(key | (mask), 0, NO_PAYLOAD);
-    //  io_printf(IO_BUF, "Got a reward\n");
+    io_printf(IO_BUF, "spike_cart_v \t%d - \t%u\n", bin, mask);
 }
 
 void resume_callback() {
@@ -388,10 +390,10 @@ bool update_state(float time_step){
     pole_velocity = (pole_acceleration * time_step) + pole_velocity;
     pole_angle = (pole_velocity * time_step) + pole_angle;
 
-//    io_printf(IO_BUF, "motor force = %k\n", (accum)motor_force);
-//    io_printf(IO_BUF, "max_pole_angle = %k, abs = %k\n", (accum)max_pole_angle, (accum)(abs(pole_angle)));
-//    io_printf(IO_BUF, "pole (d,v,a):(%k, %k, %k) and cart (d,v,a):(%k, %k, %k)\n", (accum)pole_angle, (accum)pole_velocity,
-//                        (accum)pole_acceleration, (accum)cart_position, (accum)cart_velocity, (accum)cart_acceleration);
+    io_printf(IO_BUF, "motor force = %k\n", (accum)motor_force);
+//    io_printf(IO_BUF, "max_pole_angle_bin = %k, abs = %k\n", (accum)max_pole_angle_bin, (accum)(abs(pole_angle)));
+    io_printf(IO_BUF, "pole (d,v,a):(%k, %k, %k) and cart (d,v,a):(%k, %k, %k)\n", (accum)pole_angle, (accum)pole_velocity,
+                        (accum)pole_acceleration, (accum)cart_position, (accum)cart_velocity, (accum)cart_acceleration);
 
     motor_force = 0;
 
@@ -404,11 +406,11 @@ bool update_state(float time_step){
     }
 }
 
-void mc_packet_received_callback(uint key, uint payload)
+void mc_packet_received_callback(uint keyx, uint payload)
 {
     uint32_t compare;
-    compare = key & 0x7;
-//    io_printf(IO_BUF, "compare = %x\n", compare);
+    compare = keyx & 0x1;
+    io_printf(IO_BUF, "compare = %x\n", compare);
     use(payload);
     if(compare == BACKWARD_MOTOR){
         motor_force = motor_force - force_increment;
@@ -488,10 +490,10 @@ void send_status(){
         float relative_angular_velocity = 0;
         if (central){
             if (pole_angle > 0){
-                relative_angle = pole_angle / max_pole_angle;
+                relative_angle = pole_angle / max_pole_angle_bin;
             }
             else{
-                relative_angle = -pole_angle / max_pole_angle;
+                relative_angle = -pole_angle / max_pole_angle_bin;
             }
             if (pole_velocity > 0){
                 relative_angular_velocity = pole_velocity / highend_pole_v;
@@ -513,7 +515,7 @@ void send_status(){
             }
         }
         else{
-            relative_angle = (pole_angle - min_pole_angle) / (max_pole_angle - min_pole_angle);
+            relative_angle = (pole_angle - min_pole_angle_bin) / (max_pole_angle_bin - min_pole_angle_bin);
             relative_angular_velocity = (pole_velocity + highend_pole_v) / (highend_pole_v * 2.f);
             relative_cart = cart_position / track_length;
             relative_cart_velocity = (cart_velocity + highend_cart_v) / (highend_cart_v * 2.f);
@@ -556,13 +558,13 @@ void send_status(){
         float relative_angle;
         float relative_cart_velocity;
         float relative_angular_velocity;
-        relative_angle = (pole_angle + max_pole_angle) / (2 * max_pole_angle);
-    //    io_printf(IO_BUF, "rela = %k, ang = %k, max = %k\n", (accum)relative_angle, (accum)pole_angle, (accum)max_pole_angle);
-        relative_angular_velocity = (pole_velocity + highend_pole_v) / (2 * highend_pole_v);
+        relative_angle = (pole_angle + max_pole_angle_bin) / (2.f * max_pole_angle_bin);
+    //    io_printf(IO_BUF, "rela = %k, ang = %k, max = %k\n", (accum)relative_angle, (accum)pole_angle, (accum)max_pole_angle_bin);
+        relative_angular_velocity = (pole_velocity + highend_pole_v) / (2.f * highend_pole_v);
     //    io_printf(IO_BUF, "rela = %k, angv = %k, maxv = %k\n", (accum)relative_angular_velocity, (accum)pole_velocity, (accum)highend_pole_v);
-        relative_cart = (cart_position - (track_length / 2.0f)) / (track_length / 2.0f);
+        relative_cart = cart_position / track_length;
     //    io_printf(IO_BUF, "rela = %k, cart = %k, max = %k\n", (accum)relative_cart, (accum)cart_position, (accum)track_length);
-        relative_cart_velocity = (cart_velocity + highend_cart_v) / (2 * highend_cart_v);
+        relative_cart_velocity = (cart_velocity + highend_cart_v) / (2.f * highend_cart_v);
     //    io_printf(IO_BUF, "rela = %k, cartv = %k, maxv = %k\n", (accum)relative_cart_velocity, (accum)cart_velocity, (accum)highend_cart_v);
         for (int i = 0; i < number_of_bins; i = i + 1){
             if (firing_prob(relative_angle, i)){
