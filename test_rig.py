@@ -85,7 +85,11 @@ for j in range(outputs):
     p.Projection(arm_collection[j], pendulum, p.AllToAllConnector(), p.StaticSynapse())
     # p.Projection(null_pop, arm_collection[j], p.AllToAllConnector())
     input_spikes.append(p.Population(1, p.SpikeSourcePoisson(rate=rates[j])))
-    p.Projection(input_spikes[j], arm_collection[j], p.AllToAllConnector(), p.StaticSynapse())
+    # p.Projection(input_spikes[j], arm_collection[j], p.AllToAllConnector(), p.StaticSynapse())
+    p.Projection(pendulum, arm_collection[j], p.FromListConnector(arm_conns[j]))
+
+from_list_conn_left = [[0, 0, 0.1, 1], [3, 0, 0.1, 1], [6, 0, 0.1, 1], [9, 0, 0.1, 1]]
+from_list_conn_right = [[2, 0, 0.1, 1], [5, 0, 0.1, 1], [8, 0, 0.1, 1], [11, 0, 0.1, 1]]
 
 simulator = get_simulator()
 p.run(runtime)
