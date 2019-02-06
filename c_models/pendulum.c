@@ -153,7 +153,7 @@ static inline void spike_angle(int bin)
         mask = SPECIAL_EVENT_ANGLE;
     }
     spin1_send_mc_packet(key | (mask), 0, NO_PAYLOAD);
-    io_printf(IO_BUF, "spike_angle \t%d - \t%u\n", bin, mask);
+//    io_printf(IO_BUF, "spike_angle \t%d - \t%u\n", bin, mask);
 }
 
 static inline void spike_angle_v(int bin)
@@ -166,7 +166,7 @@ static inline void spike_angle_v(int bin)
         mask = SPECIAL_EVENT_ANGLE_V;
     }
     spin1_send_mc_packet(key | (mask), 0, NO_PAYLOAD);
-    io_printf(IO_BUF, "spike_angle_v \t%d - \t%u\n", bin, mask);
+//    io_printf(IO_BUF, "spike_angle_v \t%d - \t%u\n", bin, mask);
 }
 
 static inline void spike_cart(int bin)
@@ -179,7 +179,7 @@ static inline void spike_cart(int bin)
         mask = SPECIAL_EVENT_CART;
     }
     spin1_send_mc_packet(key | (mask), 0, NO_PAYLOAD);
-    io_printf(IO_BUF, "spike_cart \t%d - \t%u\n", bin, mask);
+//    io_printf(IO_BUF, "spike_cart \t%d - \t%u\n", bin, mask);
 }
 
 static inline void spike_cart_v(int bin)
@@ -192,7 +192,7 @@ static inline void spike_cart_v(int bin)
         mask = SPECIAL_EVENT_CART_V;
     }
     spin1_send_mc_packet(key | (mask), 0, NO_PAYLOAD);
-    io_printf(IO_BUF, "spike_cart_v \t%d - \t%u\n", bin, mask);
+//    io_printf(IO_BUF, "spike_cart_v \t%d - \t%u\n", bin, mask);
 }
 
 void resume_callback() {
@@ -390,10 +390,10 @@ bool update_state(float time_step){
     pole_velocity = (pole_acceleration * time_step) + pole_velocity;
     pole_angle = (pole_velocity * time_step) + pole_angle;
 
-    io_printf(IO_BUF, "motor force = %k\n", (accum)motor_force);
+//    io_printf(IO_BUF, "motor force = %k\n", (accum)motor_force);
 //    io_printf(IO_BUF, "max_pole_angle_bin = %k, abs = %k\n", (accum)max_pole_angle_bin, (accum)(abs(pole_angle)));
-    io_printf(IO_BUF, "pole (d,v,a):(%k, %k, %k) and cart (d,v,a):(%k, %k, %k)\n", (accum)pole_angle, (accum)pole_velocity,
-                        (accum)pole_acceleration, (accum)cart_position, (accum)cart_velocity, (accum)cart_acceleration);
+//    io_printf(IO_BUF, "pole (d,v,a):(%k, %k, %k) and cart (d,v,a):(%k, %k, %k)\n", (accum)pole_angle, (accum)pole_velocity,
+//                        (accum)pole_acceleration, (accum)cart_position, (accum)cart_velocity, (accum)cart_acceleration);
 
     motor_force = 0;
 
@@ -410,7 +410,7 @@ void mc_packet_received_callback(uint keyx, uint payload)
 {
     uint32_t compare;
     compare = keyx & 0x1;
-    io_printf(IO_BUF, "compare = %x\n", compare);
+//    io_printf(IO_BUF, "compare = %x\n", compare);
     use(payload);
     if(compare == BACKWARD_MOTOR){
         motor_force = motor_force - force_increment;
