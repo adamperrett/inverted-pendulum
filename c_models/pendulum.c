@@ -101,8 +101,8 @@ float cart_acceleration = 0;  // m/s^2
 float highend_cart_v = 5; // used to calculate firing rate and bins
 float max_pole_angle = (36.0f / 180.f) * M_PI;
 float min_pole_angle = -(36.0f / 180.f) * M_PI;
-float max_pole_angle_bin = (26.0f / 180.f) * M_PI;
-float min_pole_angle_bin = -(26.0f / 180.f) * M_PI;
+float max_pole_angle_bin = (36.0f / 180.f) * M_PI;
+float min_pole_angle_bin = -(36.0f / 180.f) * M_PI;
 uint_float_union pole_angle_accum;
 float pole_angle;
 float pole_velocity = 0; // angular/s
@@ -115,7 +115,8 @@ int encoding_scheme = 0; // 0: rate, 1: time, 2: rank (replace with type def
 int number_of_bins = 20;
 float bin_width;
 float bin_overlap = 2.5;
-uint_float_union bin_overlap_accum;
+float tau_force;
+uint_float_union temp_accum;
 
 int central = 1; // if it's central that mean perfectly central on the track and angle is the lowest rate, else half
 
@@ -302,8 +303,10 @@ static bool initialize(uint32_t *timer_period)
     kiss_seed[3] = pend_region[12];
     validate_mars_kiss64_seed(kiss_seed);
 
-    bin_overlap_accum.u = pend_region[13];
-    bin_overlap = bin_overlap_accum.a;
+    temp_accum.u = pend_region[13];
+    bin_overlap = temp_accum.a;
+    temp_accum.u = pend_region[14];
+    tau_force = temp_accum.a;
 
     force_increment = (float)((max_motor_force - min_motor_force) / (float)force_increment);
 
@@ -395,7 +398,12 @@ bool update_state(float time_step){
 //    io_printf(IO_BUF, "pole (d,v,a):(%k, %k, %k) and cart (d,v,a):(%k, %k, %k)\n", (accum)pole_angle, (accum)pole_velocity,
 //                        (accum)pole_acceleration, (accum)cart_position, (accum)cart_velocity, (accum)cart_acceleration);
 
-    motor_force = 0;
+    if (tau_force){
+        motor_force = motor_force * exp(time_step / tau_force);
+    }
+    else{
+        motor_force = 0;
+    }
 
     if (cart_position > track_length || cart_position < 0  || pole_angle > max_pole_angle  || pole_angle < min_pole_angle) {
         io_printf(IO_BUF, "failed out\n");
@@ -436,28 +444,6 @@ float norm_dist(float mean, float stdev){
     norm_dist = (norm_dist * stdev) + mean;
     return (float)norm_dist;
 }
-//	float x1, x2, w, y1;
-//	static float y2;
-//	static int use_last = 0;
-//	if (use_last)		        /* use value from previous call */
-//	{
-//		y1 = y2;
-//		use_last = 0;
-//	}
-//	else
-//	{
-//		do {
-//			x1 = 2.0 * rand021() - 1.0;
-//			x2 = 2.0 * rand021() - 1.0;
-//			w = x1 * x1 + x2 * x2;
-//		} while ( w >= 1.0 );
-//		w = sqrt( (-2.0 * log( w ) ) / w );
-//		y1 = x1 * w;
-//		y2 = x2 * w;
-//		use_last = 1;
-//	}
-//	return( m + y1 * s );
-//}
 
 bool firing_prob(float relative_value, int bin){
     float norm_value = norm_dist(0, bin_width / bin_overlap);

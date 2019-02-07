@@ -122,6 +122,7 @@ class Pendulum(ApplicationVertex,
         'central': 1,
         'rand_seed': [0, 1, 2, 3],
         'bin_overlap': 2,
+        'tau_force': 0,
         'label': "pole",
         'incoming_spike_buffer_size': None,
         'duration': MAX_SIM_DURATION}
@@ -140,6 +141,7 @@ class Pendulum(ApplicationVertex,
                  central=default_parameters['central'],
                  rand_seed=default_parameters['rand_seed'],
                  bin_overlap=default_parameters['bin_overlap'],
+                 tau_force=default_parameters['tau_force'],
                  label=default_parameters['label'],
                  incoming_spike_buffer_size=default_parameters['incoming_spike_buffer_size'],
                  simulation_duration_ms=default_parameters['duration']):
@@ -170,6 +172,7 @@ class Pendulum(ApplicationVertex,
         self._central = central
         self._rand_seed = rand_seed
         self._bin_overlap = bin_overlap
+        self._tau_force = tau_force
 
         # used to define size of recording region
         self._recording_size = int((simulation_duration_ms / 1000.) * 4)
@@ -315,6 +318,7 @@ class Pendulum(ApplicationVertex,
         spec.write_value(self._rand_seed[2], data_type=DataType.UINT32)
         spec.write_value(self._rand_seed[3], data_type=DataType.UINT32)
         spec.write_value(self._bin_overlap, data_type=DataType.S1615)
+        spec.write_value(self._tau_force, data_type=DataType.S1615)
 
         # End-of-Spec:
         spec.end_specification()
