@@ -109,6 +109,12 @@ float pole_velocity = 0; // angular/s
 float pole_acceleration = 0; // angular/s^2
 float highend_pole_v = 5; // used to calculate firing rate and bins
 
+#define max_bins 10
+float pole_angle_spike_time[max_bins] = {0.f};
+float pole_velocity_spike_time[max_bins] = {0.f};
+float cart_position_spike_time[max_bins] = {0.f};
+float cart_velocity_spike_time[max_bins] = {0.f};
+
 int max_firing_rate = 20;
 float max_firing_prob = 0;
 int encoding_scheme = 0; // 0: rate, 1: time, 2: rank (replace with type def
@@ -356,6 +362,24 @@ static bool initialize(uint32_t *timer_period)
     return true;
 }
 
+//float firing_time(float relative_value, int bin){
+//    float separation = relative_value - (bin_width * (float)bin);
+//    float maximum_time_window = 1000.f / max_firing_rate;
+//    float delay;
+//    if (separation < 1){
+//        delay = maximum_time_window * separation;
+//    }
+//    else{
+//        if (encoding_scheme == 2){
+//            delay = maximum_time_window;
+//        }
+//        else{
+//            delay = maximum_time_window * separation;
+//        }
+//    }
+//    return delay;
+//}
+
 // updates the current state of the pendulum
 bool update_state(float time_step){
     float gravity = -9.8; // m/s^2
@@ -393,11 +417,6 @@ bool update_state(float time_step){
     pole_velocity = (pole_acceleration * time_step) + pole_velocity;
     pole_angle = (pole_velocity * time_step) + pole_angle;
 
-//    io_printf(IO_BUF, "motor force = %k\n", (accum)motor_force);
-//    io_printf(IO_BUF, "max_pole_angle_bin = %k, abs = %k\n", (accum)max_pole_angle_bin, (accum)(abs(pole_angle)));
-//    io_printf(IO_BUF, "pole (d,v,a):(%k, %k, %k) and cart (d,v,a):(%k, %k, %k)\n", (accum)pole_angle, (accum)pole_velocity,
-//                        (accum)pole_acceleration, (accum)cart_position, (accum)cart_velocity, (accum)cart_acceleration);
-
     if (tau_force){
         motor_force = motor_force * exp(time_step / tau_force);
     }
@@ -416,6 +435,7 @@ bool update_state(float time_step){
 
 void mc_packet_received_callback(uint keyx, uint payload)
 {
+    // make this bin related for rank encoding, relate to force increments
     uint32_t compare;
     compare = keyx & 0x1;
 //    io_printf(IO_BUF, "compare = %x\n", compare);
@@ -469,7 +489,7 @@ bool firing_prob(float relative_value, int bin){
 }
 
 void send_status(){
-    if (encoding_scheme == 0){
+    if (encoding_scheme == 0){ // rate encoding
         float relative_cart = 0;
         float relative_angle = 0;
         float relative_cart_velocity = 0;
@@ -539,7 +559,7 @@ void send_status(){
             spike_cart_v(0);
         }
     }
-    if (encoding_scheme == 1){
+    else if (encoding_scheme == 1){ // rate encoding with bins
         float relative_cart;
         float relative_angle;
         float relative_cart_velocity;
